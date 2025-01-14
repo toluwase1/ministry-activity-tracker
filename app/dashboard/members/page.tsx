@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { ManageMembers } from './manage-members'
+import { API_BASE_URL } from '../../config'
 
 interface Member {
   id: string
@@ -24,7 +25,7 @@ export default function MembersPage() {
   useEffect(() => {
     const fetchMembers = async () => {
       try {
-        const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/Member', {
+        const response = await fetch(`${API_BASE_URL}/Member`, {
           headers: {
             'Authorization': `Bearer ${user.token}`,
           },
@@ -60,4 +61,3 @@ export default function MembersPage() {
     </div>
   )
 }
-

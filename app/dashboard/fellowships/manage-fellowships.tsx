@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { API_BASE_URL } from '../../config'
 
 interface Fellowship {
   id: string
@@ -28,7 +29,7 @@ export function ManageFellowships() {
   const fetchFellowships = async () => {
     setLoading(true)
     try {
-      const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/Fellowship', {
+      const response = await fetch(`${API_BASE_URL}/Fellowship`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -52,7 +53,7 @@ export function ManageFellowships() {
   const fetchFellowshipById = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/Fellowship/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/Fellowship/${id}`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -77,7 +78,7 @@ export function ManageFellowships() {
     e.preventDefault()
     setLoading(true)
     try {
-      const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/Fellowship', {
+      const response = await fetch(`${API_BASE_URL}/Fellowship`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -102,7 +103,7 @@ export function ManageFellowships() {
     if (!editingFellowship) return
     setLoading(true)
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/Fellowship/${editingFellowship.id}`, {
+      const response = await fetch(`${API_BASE_URL}/Fellowship/${editingFellowship.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -125,7 +126,7 @@ export function ManageFellowships() {
   const deleteFellowship = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/Fellowship/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/Fellowship/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -244,4 +245,3 @@ export function ManageFellowships() {
     </div>
   )
 }
-

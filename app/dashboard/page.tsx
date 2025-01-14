@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { API_BASE_URL } from '../config'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -10,7 +11,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchFellowships = async () => {
       try {
-        const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/Fellowship', {
+        const response = await fetch(`${API_BASE_URL}/Fellowship`, {
           headers: {
             'Authorization': `Bearer ${user.token}`,
           },
@@ -52,4 +53,3 @@ export default function Dashboard() {
     </div>
   )
 }
-

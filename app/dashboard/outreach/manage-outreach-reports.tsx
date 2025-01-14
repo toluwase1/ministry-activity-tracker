@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { API_BASE_URL } from '../../config'
 
 interface OutreachReport {
   id: string
@@ -31,7 +32,7 @@ export function ManageOutreachReports() {
   const fetchReports = async () => {
     setLoading(true)
     try {
-      const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/OutreachReport', {
+      const response = await fetch(`${API_BASE_URL}/OutreachReport`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -55,7 +56,7 @@ export function ManageOutreachReports() {
   const fetchReportById = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/OutreachReport/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/OutreachReport/${id}`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -80,7 +81,7 @@ export function ManageOutreachReports() {
     e.preventDefault()
     setLoading(true)
     try {
-      const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/OutreachReport', {
+      const response = await fetch(`${API_BASE_URL}/OutreachReport`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -105,7 +106,7 @@ export function ManageOutreachReports() {
     if (!editingReport) return
     setLoading(true)
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/OutreachReport/${editingReport.id}`, {
+      const response = await fetch(`${API_BASE_URL}/OutreachReport/${editingReport.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -128,7 +129,7 @@ export function ManageOutreachReports() {
   const deleteReport = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/OutreachReport/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/OutreachReport/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -147,4 +148,3 @@ export function ManageOutreachReports() {
 
   if (loading) return <LoadingSpinner />
   if (error) return <div>Error:
-
