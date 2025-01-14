@@ -29,7 +29,7 @@ export function ManageFellowships() {
   const fetchFellowships = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/Fellowship`, {
+      const response = await fetch(`${API_BASE_URL}/api/Fellowship`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -53,7 +53,7 @@ export function ManageFellowships() {
   const fetchFellowshipById = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/Fellowship/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/Fellowship/${id}`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -78,7 +78,7 @@ export function ManageFellowships() {
     e.preventDefault()
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/Fellowship`, {
+      const response = await fetch(`${API_BASE_URL}/api/Fellowship`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -103,7 +103,7 @@ export function ManageFellowships() {
     if (!editingFellowship) return
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/Fellowship/${editingFellowship.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/Fellowship/${editingFellowship.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -126,7 +126,7 @@ export function ManageFellowships() {
   const deleteFellowship = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/Fellowship/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/Fellowship/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${user.token}`,

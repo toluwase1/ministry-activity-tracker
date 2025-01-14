@@ -11,7 +11,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchFellowships = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/Fellowship`, {
+        const response = await fetch(`${API_BASE_URL}/api/Fellowship`, {
           headers: {
             'Authorization': `Bearer ${user.token}`,
           },

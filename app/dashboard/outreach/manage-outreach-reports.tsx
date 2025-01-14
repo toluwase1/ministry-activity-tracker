@@ -20,7 +20,7 @@ export function ManageOutreachReports() {
   const { user } = useAuth()
   const [reports, setReports] = useState<OutreachReport[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const [editingReport, setEditingReport] = useState<OutreachReport | null>(null)
   const [newReport, setNewReport] = useState<Partial<OutreachReport>>({})
   const [selectedReport, setSelectedReport] = useState<OutreachReport | null>(null)
@@ -32,7 +32,7 @@ export function ManageOutreachReports() {
   const fetchReports = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/OutreachReport`, {
+      const response = await fetch(`${API_BASE_URL}/api/OutreachReport`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -56,7 +56,7 @@ export function ManageOutreachReports() {
   const fetchReportById = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/OutreachReport/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/OutreachReport/${id}`, {
         headers: {
           'Authorization': `Bearer ${user.token}`,
         },
@@ -81,7 +81,7 @@ export function ManageOutreachReports() {
     e.preventDefault()
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/OutreachReport`, {
+      const response = await fetch(`${API_BASE_URL}/api/OutreachReport`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -106,7 +106,7 @@ export function ManageOutreachReports() {
     if (!editingReport) return
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/OutreachReport/${editingReport.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/OutreachReport/${editingReport.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -129,7 +129,7 @@ export function ManageOutreachReports() {
   const deleteReport = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/OutreachReport/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/OutreachReport/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${user.token}`,
@@ -147,4 +147,5 @@ export function ManageOutreachReports() {
   }
 
   if (loading) return <LoadingSpinner />
-  if (error) return <div>Error:
+  if (error) return <div className="text-red-500 p-4">Error: {error}</div>
+}

@@ -25,7 +25,7 @@ export default function MembersPage() {
   useEffect(() => {
     const fetchMembers = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/Member`, {
+        const response = await fetch(`${API_BASE_URL}/api/Member`, {
           headers: {
             'Authorization': `Bearer ${user.token}`,
           },
