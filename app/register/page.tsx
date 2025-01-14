@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { API_BASE_URL } from '../config'
+import Preloader from '../components/Preloader'
 
 export default function Register() {
   const [email, setEmail] = useState('')
@@ -12,10 +13,13 @@ export default function Register() {
   const [lastName, setLastName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+    setLoading(true)
     try {
       const response = await fetch(`${API_BASE_URL}/Auth/register`, {
         method: 'POST',
@@ -44,11 +48,14 @@ export default function Register() {
       }
     } catch (err) {
       setError('Failed to register: ' + err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      {loading && <Preloader />}
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
@@ -156,4 +163,3 @@ export default function Register() {
     </div>
   )
 }
-

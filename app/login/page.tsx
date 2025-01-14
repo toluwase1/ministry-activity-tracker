@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Preloader from '../components/Preloader'
 
 export default function Login() {
   const router = useRouter()
@@ -12,6 +13,7 @@ export default function Login() {
   const [memberType, setMemberType] = useState(1) // Default to WorkersInTraining
   const { login } = useAuth()
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
   const searchParams = useSearchParams()
 
@@ -24,17 +26,21 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')  // Clear any previous errors
+    setError('')
+    setLoading(true)
     try {
       await login(email, password, memberType)
     } catch (err: any) {
       console.error('Login error:', err)
       setError(err.message || 'Failed to log in. Please check your credentials and try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      {loading && <Preloader />}
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
