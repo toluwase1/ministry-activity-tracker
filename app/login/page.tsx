@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '../context/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { API_BASE_URL } from '../config'
+import { useAuth } from '../context/AuthContext'
 import Preloader from '../components/Preloader'
+import { handleApiResponse, type ApiResponse } from '../utils/api-response'
+import { toast } from 'sonner'
 
 export default function Login() {
   const router = useRouter()
@@ -12,27 +15,46 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [memberType, setMemberType] = useState(1) // Default to WorkersInTraining
   const { login } = useAuth()
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [registrationSuccess, setRegistrationSuccess] = useState(false)
   const searchParams = useSearchParams()
 
-  useEffect(() => {
-    const registered = searchParams.get('registered')
-    if (registered === 'true') {
-      setRegistrationSuccess(true)
-    }
-  }, [searchParams])
+  // Show success toast if redirected from registration
+  if (searchParams?.get('registered') === 'true') {
+    toast.success('Registration successful! Please log in.');
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
+
     try {
-      await login(email, password, memberType)
-    } catch (err: any) {
+      const response = await fetch(`${API_BASE_URL}/api/Auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          memberType,
+        }),
+      })
+
+      const data: ApiResponse = await response.json()
+      console.log('Login response:', data)
+
+      if (handleApiResponse(data) && response.ok) {
+        if (data.result?.token) {
+          await login(data.result.token)
+          router.push('/dashboard')
+        } else {
+          toast.error('Invalid response from server: No token received')
+        }
+      }
+    } catch (err) {
       console.error('Login error:', err)
-      setError(err.message || 'Failed to log in. Please check your credentials and try again.')
+      toast.error('Failed to log in. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -47,11 +69,6 @@ export default function Login() {
             Sign in to your account
           </h2>
         </div>
-        {registrationSuccess && (
-          <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-md">
-            Registration successful! Please log in with your new account.
-          </div>
-        )}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit} method="POST">
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
@@ -100,8 +117,6 @@ export default function Login() {
               <option value={0}>Pastor</option>
             </select>
           </div>
-
-          {error && <div className="text-red-500 text-sm">{error}</div>}
 
           <div>
             <button

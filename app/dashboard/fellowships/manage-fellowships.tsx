@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { API_BASE_URL } from '../../config'
+import { handleApiResponse, type ApiResponse } from '../../utils/api-response'
+import { toast } from 'sonner'
 
 interface Fellowship {
   id: string
@@ -34,17 +36,15 @@ export function ManageFellowships() {
           'Authorization': `Bearer ${user.token}`,
         },
       })
-      if (!response.ok) {
-        throw new Error('Failed to fetch fellowships')
-      }
-      const data = await response.json()
-      if (data.success) {
+      const data: ApiResponse<{ items: Fellowship[] }> = await response.json()
+      console.log('Fellowships response:', data)
+
+      if (handleApiResponse(data) && response.ok) {
         setFellowships(data.result.items)
-      } else {
-        throw new Error(data.message || 'Failed to fetch fellowships')
       }
-    } catch (error) {
-      setError('Error fetching fellowships: ' + error.message)
+    } catch (err) {
+      console.error('Error fetching fellowships:', err)
+      toast.error('Failed to load fellowships')
     } finally {
       setLoading(false)
     }
@@ -58,17 +58,15 @@ export function ManageFellowships() {
           'Authorization': `Bearer ${user.token}`,
         },
       })
-      if (!response.ok) {
-        throw new Error('Failed to fetch fellowship')
-      }
-      const data = await response.json()
-      if (data.success) {
+      const data: ApiResponse<{ result: Fellowship }> = await response.json()
+      console.log('Fellowship response:', data)
+
+      if (handleApiResponse(data) && response.ok) {
         setSelectedFellowship(data.result)
-      } else {
-        throw new Error(data.message || 'Failed to fetch fellowship')
       }
-    } catch (error) {
-      setError('Error fetching fellowship: ' + error.message)
+    } catch (err) {
+      console.error('Error fetching fellowship:', err)
+      toast.error('Failed to load fellowship')
     } finally {
       setLoading(false)
     }
@@ -86,13 +84,16 @@ export function ManageFellowships() {
         },
         body: JSON.stringify(newFellowship),
       })
-      if (!response.ok) {
-        throw new Error('Failed to create fellowship')
+      const data: ApiResponse = await response.json()
+      console.log('Create fellowship response:', data)
+
+      if (handleApiResponse(data) && response.ok) {
+        setNewFellowship({})
+        fetchFellowships()
       }
-      await fetchFellowships()
-      setNewFellowship({})
-    } catch (error) {
-      setError('Error creating fellowship: ' + error.message)
+    } catch (err) {
+      console.error('Error creating fellowship:', err)
+      toast.error('Failed to create fellowship')
     } finally {
       setLoading(false)
     }
@@ -111,19 +112,25 @@ export function ManageFellowships() {
         },
         body: JSON.stringify(editingFellowship),
       })
-      if (!response.ok) {
-        throw new Error('Failed to update fellowship')
+      const data: ApiResponse = await response.json()
+      console.log('Update fellowship response:', data)
+
+      if (handleApiResponse(data) && response.ok) {
+        setEditingFellowship(null)
+        fetchFellowships()
       }
-      await fetchFellowships()
-      setEditingFellowship(null)
-    } catch (error) {
-      setError('Error updating fellowship: ' + error.message)
+    } catch (err) {
+      console.error('Error updating fellowship:', err)
+      toast.error('Failed to update fellowship')
     } finally {
       setLoading(false)
     }
   }
 
   const deleteFellowship = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this fellowship?')) {
+      return
+    }
     setLoading(true)
     try {
       const response = await fetch(`${API_BASE_URL}/api/Fellowship/${id}`, {
@@ -132,12 +139,15 @@ export function ManageFellowships() {
           'Authorization': `Bearer ${user.token}`,
         },
       })
-      if (!response.ok) {
-        throw new Error('Failed to delete fellowship')
+      const data: ApiResponse = await response.json()
+      console.log('Delete fellowship response:', data)
+
+      if (handleApiResponse(data) && response.ok) {
+        fetchFellowships()
       }
-      await fetchFellowships()
-    } catch (error) {
-      setError('Error deleting fellowship: ' + error.message)
+    } catch (err) {
+      console.error('Error deleting fellowship:', err)
+      toast.error('Failed to delete fellowship')
     } finally {
       setLoading(false)
     }

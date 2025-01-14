@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { API_BASE_URL } from '../config'
 import Preloader from '../components/Preloader'
+import { handleApiResponse, type ApiResponse } from '../utils/api-response'
+import { toast } from 'sonner'
 
 // Helper function to construct API URLs correctly
 const getApiUrl = (endpoint: string): string => {
@@ -54,7 +56,7 @@ export default function Register() {
           }
         });
         
-        const data: FellowshipResponse = await response.json();
+        const data: ApiResponse<{ items: Fellowship[]; totalCount: number }> = await response.json();
         console.log('Fellowships response:', data);
         
         if (data.success && data.result?.items) {
@@ -64,11 +66,11 @@ export default function Register() {
           );
           setFellowships(sortedFellowships);
         } else {
-          throw new Error(data.message || 'Failed to load fellowships');
+          handleApiResponse(data);
         }
       } catch (err) {
         console.error('Error fetching fellowships:', err);
-        setError('Failed to load fellowships. Please refresh the page.');
+        toast.error('Failed to load fellowships. Please refresh the page.');
       }
     };
 
@@ -76,13 +78,13 @@ export default function Register() {
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!fellowshipId) {
-      setError('Please select a fellowship')
-      return
+      toast.error('Please select a fellowship');
+      return;
     }
-    setError('')
-    setLoading(true)
+    setError('');
+    setLoading(true);
     try {
       const requestData = {
         email,
@@ -105,38 +107,15 @@ export default function Register() {
         body: JSON.stringify(requestData),
       });
 
-      console.log('Response status:', response.status);
-      const responseText = await response.text();
-      console.log('Response text:', responseText);
+      const data: ApiResponse = await response.json();
+      console.log('Registration response:', data);
 
-      let data;
-      try {
-        data = responseText ? JSON.parse(responseText) : null;
-        console.log('Parsed response data:', data);
-      } catch (parseError) {
-        console.error('Error parsing response:', parseError);
-        throw new Error('Invalid response from server');
+      if (handleApiResponse(data) && response.ok) {
+        router.push('/login?registered=true');
       }
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message || 
-          `Registration failed with status ${response.status}: ${responseText || 'No response data'}`
-        );
-      }
-
-      if (!data || !data.success) {
-        throw new Error(
-          data?.message || 
-          data?.error || 
-          'Registration failed: Server returned an invalid response'
-        );
-      }
-
-      router.push('/login?registered=true');
     } catch (err: any) {
       console.error('Registration error:', err);
-      setError(err.message || 'Failed to register. Please try again.');
+      toast.error('Failed to register. Please try again.');
     } finally {
       setLoading(false);
     }

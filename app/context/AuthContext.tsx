@@ -3,30 +3,31 @@
 import React, { createContext, useState, useContext, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { API_BASE_URL } from '../config'
+import { handleApiResponse, type ApiResponse } from '../utils/api-response'
+import { toast } from 'sonner'
 
 interface AuthContextType {
-  user: any
+  isAuthenticated: boolean
   login: (email: string, password: string, memberType: number) => Promise<void>
-  logout: () => Promise<void>
-  refreshToken: () => Promise<void>
+  logout: () => void
+  token: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any>(null)
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [token, setToken] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      setUser({ token })
+    const storedToken = localStorage.getItem('token')
+    if (storedToken) {
+      setToken(storedToken)
     }
   }, [])
 
   const login = async (email: string, password: string, memberType: number) => {
     try {
-      console.log('Sending login request with:', { email, password, memberType });  // Debug log
       const response = await fetch(`${API_BASE_URL}/Auth/login`, {
         method: 'POST',
         headers: {
@@ -41,71 +42,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
 
       const data = await response.json()
-      console.log('Login response:', data)
 
       if (!response.ok) {
         const errorMessage = data.message || `HTTP error! status: ${response.status}`
         console.error('Login failed:', errorMessage)
+        toast.error(errorMessage)
         throw new Error(errorMessage)
       }
 
       if (data.success) {
         localStorage.setItem('token', data.result.accessToken)
-        setUser({ token: data.result.accessToken })
+        setToken(data.result.accessToken)
         router.push('/dashboard')
+        toast.success('Successfully logged in')
       } else {
+        toast.error(data.message || 'Login failed')
         throw new Error(data.message || 'Login failed')
       }
     } catch (error) {
       console.error('Login error:', error)
+      toast.error('Failed to login')
       throw error
     }
   }
 
-  const logout = async () => {
-    try {
-      localStorage.removeItem('token')
-      setUser(null)
-      router.push('/login')
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
-
-  const refreshToken = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/Auth/refresh-token`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user.token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Token refresh failed')
-      }
-
-      const data = await response.json()
-      if (data.success) {
-        localStorage.setItem('token', data.result.accessToken)
-        setUser({ token: data.result.accessToken })
-      } else {
-        throw new Error(data.message || 'Token refresh failed')
-      }
-    } catch (error) {
-      console.error('Token refresh error:', error)
-      await logout()
-    }
+  const logout = () => {
+    localStorage.removeItem('token')
+    setToken(null)
+    router.push('/login')
+    toast.success('Successfully logged out')
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, refreshToken }}>
+    <AuthContext.Provider value={{
+      isAuthenticated: !!token,
+      login,
+      logout,
+      token
+    }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')
