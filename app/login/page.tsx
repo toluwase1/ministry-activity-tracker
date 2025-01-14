@@ -46,8 +46,7 @@ export default function Login() {
             Registration successful! Please log in with your new account.
           </div>
         )}
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <input type="hidden" name="remember" value="true" />
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} method="POST">
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email-address" className="sr-only">
@@ -55,7 +54,6 @@ export default function Login() {
               </label>
               <input
                 id="email-address"
-                name="email"
                 type="email"
                 autoComplete="email"
                 required
@@ -71,7 +69,6 @@ export default function Login() {
               </label>
               <input
                 id="password"
-                name="password"
                 type="password"
                 autoComplete="current-password"
                 required
@@ -89,7 +86,6 @@ export default function Login() {
             </label>
             <select
               id="member-type"
-              name="member-type"
               className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
               value={memberType}
               onChange={(e) => setMemberType(Number(e.target.value))}
