@@ -24,10 +24,12 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')  // Clear any previous errors
     try {
       await login(email, password, memberType)
-    } catch (err) {
-      setError('Failed to log in')
+    } catch (err: any) {
+      console.error('Login error:', err)
+      setError(err.message || 'Failed to log in. Please check your credentials and try again.')
     }
   }
 

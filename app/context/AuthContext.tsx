@@ -26,19 +26,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string, memberType: number) => {
     try {
+      console.log('Sending login request with:', { email, password, memberType });  // Debug log
       const response = await fetch(`${API_BASE_URL}/Auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password, memberType }),
+        body: JSON.stringify({
+          memberType: Number(memberType),
+          email,
+          password
+        }),
+        credentials: 'include'
       })
 
+      const data = await response.json()
+      console.log('Login response:', data)
+
       if (!response.ok) {
-        throw new Error('Login failed')
+        const errorMessage = data.message || `HTTP error! status: ${response.status}`
+        console.error('Login failed:', errorMessage)
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
       if (data.success) {
         localStorage.setItem('token', data.result.accessToken)
         setUser({ token: data.result.accessToken })
@@ -102,4 +112,3 @@ export const useAuth = () => {
   }
   return context
 }
-
