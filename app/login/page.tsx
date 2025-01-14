@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 export default function Login() {
@@ -13,13 +13,14 @@ export default function Login() {
   const { login } = useAuth()
   const [error, setError] = useState('')
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
+  const searchParams = useSearchParams()
 
   useEffect(() => {
-    const { registered } = router.query
+    const registered = searchParams.get('registered')
     if (registered === 'true') {
       setRegistrationSuccess(true)
     }
-  }, [router.query])
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -116,4 +117,3 @@ export default function Login() {
     </div>
   )
 }
-
