@@ -6,7 +6,7 @@ export default function Home() {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            Saints Community Church Reporter Dashboard
+            Saints Community Church Harvest Tracker
           </h1>
         </div>
       </header>
@@ -14,7 +14,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
             <div className="border-4 border-dashed border-gray-200 rounded-lg h-96 flex flex-col items-center justify-center">
-              <h2 className="text-2xl font-semibold mb-4">Welcome to our Church Reporting System</h2>
+              <h2 className="text-2xl font-semibold mb-4">Welcome to Harvest Tracker</h2>
               <p className="text-gray-600 mb-8 text-center max-w-md">
                 Efficiently manage your church's activities, members, and reports with our comprehensive dashboard.
               </p>
