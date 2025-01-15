@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { getApiUrl } from '../../utils/api-url'
+import { handleApiResponse, type ApiResponse } from '../../utils/api-response'
+import { toast } from 'sonner'
+import LoadingSpinner from '../../components/LoadingSpinner'
 
 interface AttendanceReport {
   id: string
@@ -14,36 +18,36 @@ interface AttendanceReport {
 }
 
 export function ManageAttendance() {
-  const { user } = useAuth()
+  const { token } = useAuth()
+  const [loading, setLoading] = useState(false)
   const [attendanceReports, setAttendanceReports] = useState<AttendanceReport[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editingReport, setEditingReport] = useState<AttendanceReport | null>(null)
   const [newReport, setNewReport] = useState<Partial<AttendanceReport>>({})
   const [selectedReport, setSelectedReport] = useState<AttendanceReport | null>(null)
 
   useEffect(() => {
-    fetchAttendanceReports()
-  }, [user])
+    if (token) {
+      fetchAttendanceReports()
+    }
+  }, [token])
 
   const fetchAttendanceReports = async () => {
-    setLoading(true)
     try {
-      const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/AttendanceReport', {
+      setLoading(true)
+      const response = await fetch(getApiUrl('AttendanceReport'), {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
-        },
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
       })
-      if (!response.ok) {
-        throw new Error('Failed to fetch attendance reports')
-      }
+
       const data = await response.json()
-      if (data.success) {
+      if (handleApiResponse(data) && response.ok) {
         setAttendanceReports(data.result.items)
-      } else {
-        throw new Error(data.message || 'Failed to fetch attendance reports')
       }
     } catch (error) {
+      console.error('Error fetching attendance reports:', error)
       setError('Error fetching attendance reports: ' + error.message)
     } finally {
       setLoading(false)
@@ -52,21 +56,19 @@ export function ManageAttendance() {
 
   const fetchAttendanceReportById = async (id: string) => {
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/AttendanceReport/${id}`, {
+      const response = await fetch(getApiUrl(`AttendanceReport/${id}`), {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
-        },
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
       })
-      if (!response.ok) {
-        throw new Error('Failed to fetch attendance report')
-      }
+
       const data = await response.json()
-      if (data.success) {
+      if (handleApiResponse(data) && response.ok) {
         setSelectedReport(data.result)
-      } else {
-        throw new Error(data.message || 'Failed to fetch attendance report')
       }
     } catch (error) {
+      console.error('Error fetching attendance report:', error)
       setError('Error fetching attendance report: ' + error.message)
     }
   }
@@ -74,20 +76,23 @@ export function ManageAttendance() {
   const createAttendanceReport = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const response = await fetch('https://attendancesystem-2gjw.onrender.com/api/AttendanceReport', {
+      const response = await fetch(getApiUrl('AttendanceReport'), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(newReport),
       })
-      if (!response.ok) {
-        throw new Error('Failed to create attendance report')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        await fetchAttendanceReports()
+        setNewReport({})
       }
-      await fetchAttendanceReports()
-      setNewReport({})
     } catch (error) {
+      console.error('Error creating attendance report:', error)
       setError('Error creating attendance report: ' + error.message)
     }
   }
@@ -96,37 +101,43 @@ export function ManageAttendance() {
     e.preventDefault()
     if (!editingReport) return
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/AttendanceReport/${editingReport.id}`, {
+      const response = await fetch(getApiUrl(`AttendanceReport/${editingReport.id}`), {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(editingReport),
       })
-      if (!response.ok) {
-        throw new Error('Failed to update attendance report')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        await fetchAttendanceReports()
+        setEditingReport(null)
       }
-      await fetchAttendanceReports()
-      setEditingReport(null)
     } catch (error) {
+      console.error('Error updating attendance report:', error)
       setError('Error updating attendance report: ' + error.message)
     }
   }
 
   const deleteAttendanceReport = async (id: string) => {
     try {
-      const response = await fetch(`https://attendancesystem-2gjw.onrender.com/api/AttendanceReport/${id}`, {
+      const response = await fetch(getApiUrl(`AttendanceReport/${id}`), {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         },
       })
-      if (!response.ok) {
-        throw new Error('Failed to delete attendance report')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        await fetchAttendanceReports()
       }
-      await fetchAttendanceReports()
     } catch (error) {
+      console.error('Error deleting attendance report:', error)
       setError('Error deleting attendance report: ' + error.message)
     }
   }
@@ -235,4 +246,3 @@ export function ManageAttendance() {
     </div>
   )
 }
-

@@ -2,36 +2,45 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { API_BASE_URL } from '../config'
+import { getApiUrl } from '../utils/api-url'
+import { handleApiResponse, type ApiResponse } from '../utils/api-response'
+import { toast } from 'sonner'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { token } = useAuth()
+  const [loading, setLoading] = useState(false)
   const [fellowships, setFellowships] = useState([])
 
-  useEffect(() => {
-    const fetchFellowships = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/Fellowship`, {
-          headers: {
-            'Authorization': `Bearer ${user.token}`,
-          },
-        })
-        if (!response.ok) {
-          throw new Error('Failed to fetch fellowships')
+  const fetchFellowships = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(getApiUrl('Fellowship'), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         }
-        const data = await response.json()
-        if (data.success) {
-          setFellowships(data.result.items)
-        }
-      } catch (error) {
-        console.error('Error fetching fellowships:', error)
-      }
-    }
+      })
 
-    if (user) {
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        setFellowships(data.result.items)
+      }
+    } catch (error) {
+      console.error('Error fetching fellowships:', error)
+      toast.error('Failed to load fellowships')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (token) {
       fetchFellowships()
     }
-  }, [user])
+  }, [token])
+
+  if (loading) return <LoadingSpinner />
 
   return (
     <div>

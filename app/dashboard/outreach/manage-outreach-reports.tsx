@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { getApiUrl } from '../../utils/api-url'
+import { handleApiResponse, type ApiResponse } from '../../utils/api-response'
+import { toast } from 'sonner'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { API_BASE_URL } from '../../config'
 
 interface OutreachReport {
   id: string
@@ -17,36 +19,31 @@ interface OutreachReport {
 }
 
 export function ManageOutreachReports() {
-  const { user } = useAuth()
+  const { token } = useAuth()
   const [reports, setReports] = useState<OutreachReport[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingReport, setEditingReport] = useState<OutreachReport | null>(null)
   const [newReport, setNewReport] = useState<Partial<OutreachReport>>({})
   const [selectedReport, setSelectedReport] = useState<OutreachReport | null>(null)
 
-  useEffect(() => {
-    fetchReports()
-  }, [user])
-
   const fetchReports = async () => {
-    setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/OutreachReport`, {
+      setLoading(true)
+      const response = await fetch(getApiUrl('OutreachReport'), {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
-        },
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
       })
-      if (!response.ok) {
-        throw new Error('Failed to fetch outreach reports')
-      }
+
       const data = await response.json()
-      if (data.success) {
+      if (handleApiResponse(data) && response.ok) {
         setReports(data.result.items)
-      } else {
-        throw new Error(data.message || 'Failed to fetch outreach reports')
       }
     } catch (error) {
+      console.error('Error fetching outreach reports:', error)
+      toast.error('Failed to load outreach reports')
       setError('Error fetching outreach reports: ' + error.message)
     } finally {
       setLoading(false)
@@ -56,21 +53,20 @@ export function ManageOutreachReports() {
   const fetchReportById = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/OutreachReport/${id}`, {
+      const response = await fetch(getApiUrl(`OutreachReport/${id}`), {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
-        },
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
       })
-      if (!response.ok) {
-        throw new Error('Failed to fetch outreach report')
-      }
+
       const data = await response.json()
-      if (data.success) {
+      if (handleApiResponse(data) && response.ok) {
         setSelectedReport(data.result)
-      } else {
-        throw new Error(data.message || 'Failed to fetch outreach report')
       }
     } catch (error) {
+      console.error('Error fetching outreach report:', error)
+      toast.error('Failed to load outreach report')
       setError('Error fetching outreach report: ' + error.message)
     } finally {
       setLoading(false)
@@ -81,20 +77,24 @@ export function ManageOutreachReports() {
     e.preventDefault()
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/OutreachReport`, {
+      const response = await fetch(getApiUrl('OutreachReport'), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(newReport),
       })
-      if (!response.ok) {
-        throw new Error('Failed to create outreach report')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        await fetchReports()
+        setNewReport({})
       }
-      await fetchReports()
-      setNewReport({})
     } catch (error) {
+      console.error('Error creating outreach report:', error)
+      toast.error('Failed to create outreach report')
       setError('Error creating outreach report: ' + error.message)
     } finally {
       setLoading(false)
@@ -106,20 +106,24 @@ export function ManageOutreachReports() {
     if (!editingReport) return
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/OutreachReport/${editingReport.id}`, {
+      const response = await fetch(getApiUrl(`OutreachReport/${editingReport.id}`), {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(editingReport),
       })
-      if (!response.ok) {
-        throw new Error('Failed to update outreach report')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        await fetchReports()
+        setEditingReport(null)
       }
-      await fetchReports()
-      setEditingReport(null)
     } catch (error) {
+      console.error('Error updating outreach report:', error)
+      toast.error('Failed to update outreach report')
       setError('Error updating outreach report: ' + error.message)
     } finally {
       setLoading(false)
@@ -129,22 +133,32 @@ export function ManageOutreachReports() {
   const deleteReport = async (id: string) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/OutreachReport/${id}`, {
+      const response = await fetch(getApiUrl(`OutreachReport/${id}`), {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         },
       })
-      if (!response.ok) {
-        throw new Error('Failed to delete outreach report')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        await fetchReports()
       }
-      await fetchReports()
     } catch (error) {
+      console.error('Error deleting outreach report:', error)
+      toast.error('Failed to delete outreach report')
       setError('Error deleting outreach report: ' + error.message)
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (token) {
+      fetchReports()
+    }
+  }, [token])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div className="text-red-500 p-4">Error: {error}</div>

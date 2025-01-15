@@ -15,7 +15,7 @@ interface Fellowship {
   meetingTime: string
 }
 
-export function ManageFellowships() {
+function ManageFellowships() {
   const { user } = useAuth()
   const [fellowships, setFellowships] = useState<Fellowship[]>([])
   const [loading, setLoading] = useState(true)
@@ -255,3 +255,5 @@ export function ManageFellowships() {
     </div>
   )
 }
+
+export { ManageFellowships }
