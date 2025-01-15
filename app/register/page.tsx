@@ -6,15 +6,8 @@ import Link from 'next/link'
 import { API_BASE_URL } from '../config'
 import Preloader from '../components/Preloader'
 import { handleApiResponse, type ApiResponse } from '../utils/api-response'
+import { getApiUrl } from '../utils/api-url'
 import { toast } from 'sonner'
-
-// Helper function to construct API URLs correctly
-const getApiUrl = (endpoint: string): string => {
-  const baseUrl = API_BASE_URL.endsWith('/api') 
-    ? API_BASE_URL.slice(0, -4) 
-    : API_BASE_URL;
-  return `${baseUrl}/api/${endpoint.replace(/^\/+/, '')}`;
-};
 
 interface Fellowship {
   id: string;

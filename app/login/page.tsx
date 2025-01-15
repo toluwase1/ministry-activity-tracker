@@ -7,28 +7,41 @@ import { API_BASE_URL } from '../config'
 import { useAuth } from '../context/AuthContext'
 import Preloader from '../components/Preloader'
 import { handleApiResponse, type ApiResponse } from '../utils/api-response'
+import { getApiUrl } from '../utils/api-url'
 import { toast } from 'sonner'
 
+interface LoginResponse {
+  accessToken: string;
+  refreshToken: string | null;
+  expiredAt: string;
+}
+
 export default function Login() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [memberType, setMemberType] = useState(1) // Default to WorkersInTraining
-  const { login } = useAuth()
+  const [memberType, setMemberType] = useState(0) // Default to Pastor (0)
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
   const searchParams = useSearchParams()
+  const { login } = useAuth()
 
-  // Show success toast if redirected from registration
-  if (searchParams?.get('registered') === 'true') {
-    toast.success('Registration successful! Please log in.');
-  }
+  // Show registration success message only once when component mounts
+  useEffect(() => {
+    if (searchParams?.get('registered') === 'true') {
+      toast.success('Registration successful! Please log in.')
+      // Remove the registered parameter from URL to prevent showing the message again
+      const url = new URL(window.location.href)
+      url.searchParams.delete('registered')
+      window.history.replaceState({}, '', url)
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/Auth/login`, {
+      const response = await fetch(getApiUrl('Auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -37,20 +50,25 @@ export default function Login() {
         body: JSON.stringify({
           email,
           password,
-          memberType,
+          memberType: Number(memberType), // Ensure memberType is sent as a number
         }),
       })
 
-      const data: ApiResponse = await response.json()
+      const data: ApiResponse<LoginResponse> = await response.json()
       console.log('Login response:', data)
 
-      if (handleApiResponse(data) && response.ok) {
-        if (data.result?.token) {
-          await login(data.result.token)
-          router.push('/dashboard')
-        } else {
-          toast.error('Invalid response from server: No token received')
-        }
+      if (!data.success) {
+        toast.error(data.message || 'Login failed')
+        return
+      }
+
+      if (response.ok && data.result?.accessToken) {
+        await login(data.result.accessToken)
+        // After successful login, navigate to dashboard
+        router.push('/dashboard')
+        toast.success('Successfully logged in')
+      } else {
+        toast.error('Invalid response from server: No access token received')
       }
     } catch (err) {
       console.error('Login error:', err)
@@ -77,6 +95,7 @@ export default function Login() {
               </label>
               <input
                 id="email-address"
+                name="email"
                 type="email"
                 autoComplete="email"
                 required
@@ -92,6 +111,7 @@ export default function Login() {
               </label>
               <input
                 id="password"
+                name="password"
                 type="password"
                 autoComplete="current-password"
                 required
@@ -113,25 +133,31 @@ export default function Login() {
               value={memberType}
               onChange={(e) => setMemberType(Number(e.target.value))}
             >
-              <option value={1}>Workers In Training</option>
               <option value={0}>Pastor</option>
+              <option value={1}>Workers In Training</option>
             </select>
           </div>
 
           <div>
             <button
               type="submit"
+              disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              Sign in
+              {loading ? (
+                <Preloader />
+              ) : (
+                'Sign in'
+              )}
             </button>
           </div>
+
+          <div className="text-sm text-center">
+            <Link href="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+              Don't have an account? Register
+            </Link>
+          </div>
         </form>
-        <div className="text-center mt-4">
-          <Link href="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-            Don't have an account? Register here
-          </Link>
-        </div>
       </div>
     </div>
   )

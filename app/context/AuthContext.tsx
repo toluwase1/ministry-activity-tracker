@@ -4,11 +4,12 @@ import React, { createContext, useState, useContext, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { API_BASE_URL } from '../config'
 import { handleApiResponse, type ApiResponse } from '../utils/api-response'
+import { getApiUrl } from '../utils/api-url'
 import { toast } from 'sonner'
 
 interface AuthContextType {
   isAuthenticated: boolean
-  login: (email: string, password: string, memberType: number) => Promise<void>
+  login: (token: string) => Promise<void>
   logout: () => void
   token: string | null
 }
@@ -26,42 +27,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const login = async (email: string, password: string, memberType: number) => {
+  const login = async (token: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/Auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          memberType: Number(memberType),
-          email,
-          password
-        }),
-        credentials: 'include'
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        const errorMessage = data.message || `HTTP error! status: ${response.status}`
-        console.error('Login failed:', errorMessage)
-        toast.error(errorMessage)
-        throw new Error(errorMessage)
+      if (!token) {
+        throw new Error('No token provided')
       }
-
-      if (data.success) {
-        localStorage.setItem('token', data.result.accessToken)
-        setToken(data.result.accessToken)
-        router.push('/dashboard')
-        toast.success('Successfully logged in')
-      } else {
-        toast.error(data.message || 'Login failed')
-        throw new Error(data.message || 'Login failed')
-      }
+      localStorage.setItem('token', token)
+      setToken(token)
+      toast.success('Successfully logged in')
     } catch (error) {
       console.error('Login error:', error)
-      toast.error('Failed to login')
+      toast.error('Failed to save login information')
       throw error
     }
   }
