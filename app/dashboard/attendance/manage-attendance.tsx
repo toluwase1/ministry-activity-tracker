@@ -7,10 +7,25 @@ import { handleApiResponse, type ApiResponse } from '../../utils/api-response'
 import { toast } from 'sonner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+interface Member {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  status: string
+}
+
+interface Activity {
+  id: string
+  name: string
+  description: string
+  type: string
+}
+
 interface AttendanceReport {
   id: string
   memberId: string
-  memberFullName: string
+  memberName: string
   activityId: string
   activityName: string
   isPresent: boolean
@@ -21,16 +36,56 @@ export function ManageAttendance() {
   const { token } = useAuth()
   const [loading, setLoading] = useState(false)
   const [attendanceReports, setAttendanceReports] = useState<AttendanceReport[]>([])
-  const [error, setError] = useState('')
-  const [editingReport, setEditingReport] = useState<AttendanceReport | null>(null)
-  const [newReport, setNewReport] = useState<Partial<AttendanceReport>>({})
-  const [selectedReport, setSelectedReport] = useState<AttendanceReport | null>(null)
+  const [members, setMembers] = useState<Member[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [newReport, setNewReport] = useState({
+    memberId: '',
+    activityId: '',
+    isPresent: true,
+    date: new Date().toISOString()
+  })
 
-  useEffect(() => {
-    if (token) {
-      fetchAttendanceReports()
+  const fetchMembers = async () => {
+    try {
+      const response = await fetch(getApiUrl('Member'), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      })
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        setMembers(data.result.items)
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error)
+      toast.error('Failed to load members')
     }
-  }, [token])
+  }
+
+  const fetchActivities = async () => {
+    try {
+      const response = await fetch(getApiUrl('Activity'), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      })
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        // Filter only attendance type activities
+        const attendanceActivities = data.result.items.filter(
+          (activity: Activity) => activity.type === 'Attendance'
+        )
+        setActivities(attendanceActivities)
+      }
+    } catch (error) {
+      console.error('Error fetching activities:', error)
+      toast.error('Failed to load activities')
+    }
+  }
 
   const fetchAttendanceReports = async () => {
     try {
@@ -48,34 +103,16 @@ export function ManageAttendance() {
       }
     } catch (error) {
       console.error('Error fetching attendance reports:', error)
-      setError('Error fetching attendance reports: ' + error.message)
+      toast.error('Failed to load attendance reports')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchAttendanceReportById = async (id: string) => {
-    try {
-      const response = await fetch(getApiUrl(`AttendanceReport/${id}`), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
-      })
-
-      const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        setSelectedReport(data.result)
-      }
-    } catch (error) {
-      console.error('Error fetching attendance report:', error)
-      setError('Error fetching attendance report: ' + error.message)
     }
   }
 
   const createAttendanceReport = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      setLoading(true)
       const response = await fetch(getApiUrl('AttendanceReport'), {
         method: 'POST',
         headers: {
@@ -83,166 +120,159 @@ export function ManageAttendance() {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(newReport),
+        body: JSON.stringify(newReport)
       })
 
       const data = await response.json()
       if (handleApiResponse(data) && response.ok) {
+        toast.success('Attendance report created successfully')
+        setNewReport({
+          memberId: '',
+          activityId: '',
+          isPresent: true,
+          date: new Date().toISOString()
+        })
         await fetchAttendanceReports()
-        setNewReport({})
       }
     } catch (error) {
       console.error('Error creating attendance report:', error)
-      setError('Error creating attendance report: ' + error.message)
+      toast.error('Failed to create attendance report')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const updateAttendanceReport = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingReport) return
-    try {
-      const response = await fetch(getApiUrl(`AttendanceReport/${editingReport.id}`), {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(editingReport),
-      })
-
-      const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        await fetchAttendanceReports()
-        setEditingReport(null)
-      }
-    } catch (error) {
-      console.error('Error updating attendance report:', error)
-      setError('Error updating attendance report: ' + error.message)
+  useEffect(() => {
+    if (token) {
+      fetchMembers()
+      fetchActivities()
+      fetchAttendanceReports()
     }
-  }
+  }, [token])
 
-  const deleteAttendanceReport = async (id: string) => {
-    try {
-      const response = await fetch(getApiUrl(`AttendanceReport/${id}`), {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        },
-      })
-
-      const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        await fetchAttendanceReports()
-      }
-    } catch (error) {
-      console.error('Error deleting attendance report:', error)
-      setError('Error deleting attendance report: ' + error.message)
-    }
-  }
-
-  if (loading) return <div>Loading...</div>
-  if (error) return <div>Error: {error}</div>
+  if (loading) return <LoadingSpinner />
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Manage Attendance</h2>
-      
-      {/* Create new attendance report form */}
-      <form onSubmit={createAttendanceReport} className="space-y-4">
-        <input
-          type="text"
-          placeholder="Member Full Name"
-          value={newReport.memberFullName || ''}
-          onChange={(e) => setNewReport({...newReport, memberFullName: e.target.value})}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          type="text"
-          placeholder="Activity Name"
-          value={newReport.activityName || ''}
-          onChange={(e) => setNewReport({...newReport, activityName: e.target.value})}
-          className="w-full p-2 border rounded"
-        />
-        <select
-          value={newReport.isPresent ? 'true' : 'false'}
-          onChange={(e) => setNewReport({...newReport, isPresent: e.target.value === 'true'})}
-          className="w-full p-2 border rounded"
-        >
-          <option value="true">Present</option>
-          <option value="false">Absent</option>
-        </select>
-        <input
-          type="date"
-          value={newReport.date || ''}
-          onChange={(e) => setNewReport({...newReport, date: e.target.value})}
-          className="w-full p-2 border rounded"
-        />
-        <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded">Add Attendance Report</button>
-      </form>
-
-      {/* List of attendance reports */}
-      <div className="space-y-4">
-        {attendanceReports.map((report) => (
-          <div key={report.id} className="p-4 border rounded">
-            {editingReport && editingReport.id === report.id ? (
-              <form onSubmit={updateAttendanceReport} className="space-y-2">
-                <input
-                  type="text"
-                  value={editingReport.memberFullName}
-                  onChange={(e) => setEditingReport({...editingReport, memberFullName: e.target.value})}
-                  className="w-full p-2 border rounded"
-                />
-                <input
-                  type="text"
-                  value={editingReport.activityName}
-                  onChange={(e) => setEditingReport({...editingReport, activityName: e.target.value})}
-                  className="w-full p-2 border rounded"
-                />
-                <select
-                  value={editingReport.isPresent ? 'true' : 'false'}
-                  onChange={(e) => setEditingReport({...editingReport, isPresent: e.target.value === 'true'})}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="true">Present</option>
-                  <option value="false">Absent</option>
-                </select>
-                <input
-                  type="date"
-                  value={editingReport.date}
-                  onChange={(e) => setEditingReport({...editingReport, date: e.target.value})}
-                  className="w-full p-2 border rounded"
-                />
-                <button type="submit" className="px-4 py-2 bg-green-500 text-white rounded">Save</button>
-                <button onClick={() => setEditingReport(null)} className="px-4 py-2 bg-gray-500 text-white rounded ml-2">Cancel</button>
-              </form>
-            ) : (
-              <>
-                <h3 className="font-bold">{report.memberFullName}</h3>
-                <p>Activity: {report.activityName}</p>
-                <p>Present: {report.isPresent ? 'Yes' : 'No'}</p>
-                <p>Date: {new Date(report.date).toLocaleDateString()}</p>
-                <button onClick={() => setEditingReport(report)} className="px-4 py-2 bg-yellow-500 text-white rounded mt-2">Edit</button>
-                <button onClick={() => deleteAttendanceReport(report.id)} className="px-4 py-2 bg-red-500 text-white rounded mt-2 ml-2">Delete</button>
-                <button onClick={() => fetchAttendanceReportById(report.id)} className="px-4 py-2 bg-blue-500 text-white rounded mt-2 ml-2">View Details</button>
-              </>
-            )}
+      {/* Create New Attendance Report Form */}
+      <div className="bg-white shadow sm:rounded-lg p-6">
+        <h2 className="text-lg font-medium mb-4">Create New Attendance Report</h2>
+        <form onSubmit={createAttendanceReport} className="space-y-4">
+          <div>
+            <label htmlFor="member" className="block text-sm font-medium text-gray-700">
+              Member
+            </label>
+            <select
+              id="member"
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              value={newReport.memberId}
+              onChange={(e) => setNewReport({ ...newReport, memberId: e.target.value })}
+              required
+            >
+              <option value="">Select a member</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.firstName} {member.lastName}
+                </option>
+              ))}
+            </select>
           </div>
-        ))}
+
+          <div>
+            <label htmlFor="activity" className="block text-sm font-medium text-gray-700">
+              Activity
+            </label>
+            <select
+              id="activity"
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              value={newReport.activityId}
+              onChange={(e) => setNewReport({ ...newReport, activityId: e.target.value })}
+              required
+            >
+              <option value="">Select an activity</option>
+              {activities.map((activity) => (
+                <option key={activity.id} value={activity.id}>
+                  {activity.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="date" className="block text-sm font-medium text-gray-700">
+              Date
+            </label>
+            <input
+              type="datetime-local"
+              id="date"
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              value={newReport.date.slice(0, 16)} // Format date for datetime-local input
+              onChange={(e) => setNewReport({ ...newReport, date: new Date(e.target.value).toISOString() })}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Attendance Status
+            </label>
+            <div className="mt-2">
+              <label className="inline-flex items-center">
+                <input
+                  type="checkbox"
+                  className="form-checkbox h-4 w-4 text-indigo-600"
+                  checked={newReport.isPresent}
+                  onChange={(e) => setNewReport({ ...newReport, isPresent: e.target.checked })}
+                />
+                <span className="ml-2">Present</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={loading}
+            >
+              {loading ? 'Creating...' : 'Create Report'}
+            </button>
+          </div>
+        </form>
       </div>
 
-      {/* Selected attendance report details */}
-      {selectedReport && (
-        <div className="mt-6 p-4 border rounded">
-          <h3 className="text-xl font-bold mb-2">Selected Attendance Report Details</h3>
-          <p><strong>Member:</strong> {selectedReport.memberFullName}</p>
-          <p><strong>Activity:</strong> {selectedReport.activityName}</p>
-          <p><strong>Present:</strong> {selectedReport.isPresent ? 'Yes' : 'No'}</p>
-          <p><strong>Date:</strong> {new Date(selectedReport.date).toLocaleDateString()}</p>
-          <button onClick={() => setSelectedReport(null)} className="px-4 py-2 bg-gray-500 text-white rounded mt-2">Close</button>
+      {/* Attendance Reports List */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="px-4 py-5 sm:px-6">
+          <h2 className="text-lg font-medium">Attendance Reports</h2>
         </div>
-      )}
+        <div className="border-t border-gray-200">
+          <ul className="divide-y divide-gray-200">
+            {attendanceReports.map((report) => (
+              <li key={report.id} className="px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{report.memberName}</p>
+                    <p className="text-sm text-gray-500">{report.activityName}</p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(report.date).toLocaleString()}
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      report.isPresent
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {report.isPresent ? 'Present' : 'Absent'}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   )
 }
