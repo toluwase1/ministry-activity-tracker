@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { API_BASE_URL } from '../config'
 import { useAuth } from '../context/AuthContext'
@@ -19,9 +19,8 @@ interface LoginResponse {
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [memberType, setMemberType] = useState(0) // Default to Pastor (0)
+  const [memberType, setMemberType] = useState(1) // Default to Workers in Training (1)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
   const searchParams = useSearchParams()
   const { login } = useAuth()
 
@@ -64,8 +63,6 @@ export default function Login() {
 
       if (response.ok && data.result?.accessToken) {
         await login(data.result.accessToken)
-        // After successful login, navigate to dashboard
-        router.push('/dashboard')
         toast.success('Successfully logged in')
       } else {
         toast.error('Invalid response from server: No access token received')
@@ -133,8 +130,8 @@ export default function Login() {
               value={memberType}
               onChange={(e) => setMemberType(Number(e.target.value))}
             >
-              <option value={0}>Pastor</option>
               <option value={1}>Workers In Training</option>
+              <option value={0}>Pastor</option>
             </select>
           </div>
 

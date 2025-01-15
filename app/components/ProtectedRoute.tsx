@@ -6,16 +6,16 @@ import { useAuth } from '../context/AuthContext'
 import LoadingSpinner from './LoadingSpinner'
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth()
+  const { isAuthenticated, token } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login')
+    if (!token) {
+      router.replace('/login')
     }
-  }, [user, router])
+  }, [token, router])
 
-  if (!user) {
+  if (!token) {
     return <LoadingSpinner />
   }
 
@@ -23,4 +23,3 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 }
 
 export default ProtectedRoute
-

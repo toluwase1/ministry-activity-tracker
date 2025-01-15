@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
+    // Check for token on mount
     const storedToken = localStorage.getItem('token')
     if (storedToken) {
       setToken(storedToken)
@@ -34,7 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       localStorage.setItem('token', token)
       setToken(token)
-      toast.success('Successfully logged in')
+      // Navigate to dashboard after successful login
+      router.replace('/dashboard')
     } catch (error) {
       console.error('Login error:', error)
       toast.error('Failed to save login information')
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     localStorage.removeItem('token')
     setToken(null)
-    router.push('/login')
+    router.replace('/login')
     toast.success('Successfully logged out')
   }
 
