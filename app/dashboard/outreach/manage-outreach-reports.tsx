@@ -85,22 +85,23 @@ export function ManageOutreachReports() {
 
   const fetchMembers = async () => {
     try {
-      const response = await fetch(getApiUrl('Member'), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
-      })
+        const response = await fetch(getApiUrl('Member'), {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            }
+        });
 
-      const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        setMembers(data.result)
-      }
+        const data = await response.json();
+        if (handleApiResponse(data) && response.ok) {
+            // Set members to the 'items' array from the API response
+            setMembers(Array.isArray(data.result.items) ? data.result.items : []);
+        }
     } catch (error) {
-      console.error('Error fetching members:', error)
-      toast.error('Failed to load members')
+        console.error('Error fetching members:', error);
+        toast.error('Failed to load members');
     }
-  }
+};
 
   const fetchActivities = async () => {
     try {
@@ -113,7 +114,10 @@ export function ManageOutreachReports() {
 
       const data = await response.json()
       if (handleApiResponse(data) && response.ok) {
-        setActivities(data.result.filter((activity: Activity) => activity.type === 'Outreach'))
+        const attendanceActivities = data.result.items.filter(
+          (activity: Activity) => activity.type === 'Outreach'
+        )
+        setActivities(attendanceActivities)
       }
     } catch (error) {
       console.error('Error fetching activities:', error)
