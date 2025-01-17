@@ -16,26 +16,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Initialize token from localStorage
+const getStoredToken = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token')
+  }
+  return null
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(getStoredToken())
+  const [isInitialized, setIsInitialized] = useState(false)
   const router = useRouter()
 
+  // Initialize auth state
   useEffect(() => {
-    // Check for token on mount
-    const storedToken = localStorage.getItem('token')
+    const storedToken = getStoredToken()
     if (storedToken) {
       setToken(storedToken)
     }
+    setIsInitialized(true)
   }, [])
 
-  const login = async (token: string) => {
+  const login = async (newToken: string) => {
     try {
-      if (!token) {
+      if (!newToken) {
         throw new Error('No token provided')
       }
-      localStorage.setItem('token', token)
-      setToken(token)
-      // Navigate to dashboard after successful login
+      localStorage.setItem('token', newToken)
+      setToken(newToken)
       router.replace('/dashboard')
     } catch (error) {
       console.error('Login error:', error)
@@ -49,6 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null)
     router.replace('/login')
     toast.success('Successfully logged out')
+  }
+
+  // Don't render children until auth is initialized
+  if (!isInitialized) {
+    return null
   }
 
   return (

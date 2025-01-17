@@ -10,13 +10,17 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter()
 
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated && !token) {
       router.replace('/login')
     }
-  }, [token, router])
+  }, [isAuthenticated, token, router])
 
-  if (!token) {
-    return <LoadingSpinner />
+  if (!isAuthenticated || !token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    )
   }
 
   return <>{children}</>
