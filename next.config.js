@@ -2,11 +2,16 @@
 const nextConfig = {
     reactStrictMode: true,
     webpack: (config, { isServer }) => {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        'recharts': 'recharts/es6' // Use ES6 module to avoid eval
-      }
-      
+      config.optimization.minimizer = config.optimization.minimizer.map(
+        plugin => {
+          if (plugin.constructor.name === 'TerserPlugin') {
+            plugin.options.terserOptions.keep_classnames = true
+            plugin.options.terserOptions.keep_fnames = true
+          }
+          return plugin
+        }
+      )
+  
       if (!isServer) {
         config.resolve.fallback = {
           ...config.resolve.fallback,
