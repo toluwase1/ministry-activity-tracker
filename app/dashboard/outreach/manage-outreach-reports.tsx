@@ -598,19 +598,26 @@ export function ManageOutreachReports() {
                     </p>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <button
-                      onClick={() => fetchOutreachReportById(report.id)}
-                      className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteReport(report.id)}
-                      className="text-red-600 hover:text-red-900 text-sm font-medium"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => fetchOutreachReportById(report.id)}
+                        className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setSelectedReport(report)}
+                        className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReport(report.id)}
+                        className="text-red-600 hover:text-red-900 text-sm font-medium"
+                      >
+                        Delete
+                      </button>
+                    </div>
+
                 </div>
               </li>
             ))}
@@ -832,6 +839,72 @@ export function ManageOutreachReports() {
           </div>
         </div>
       )}
+
+                {/* View Modal */}
+          {selectedReport && (
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4"
+              tabIndex={-1}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setSelectedReport(null);
+              }}
+            >
+              <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-medium">Outreach Report Details</h3>
+                  <button
+                    onClick={() => setSelectedReport(null)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Member Name</p>
+                    <p className="text-sm text-gray-900">{selectedReport.memberName}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Activity Name</p>
+                    <p className="text-sm text-gray-900">{selectedReport.activityName}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Date</p>
+                    <p className="text-sm text-gray-900">{new Date(selectedReport.date).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Total People Reached</p>
+                    <p className="text-sm text-gray-900">{selectedReport.totalPeopleReached}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-medium text-gray-700">Notes</p>
+                    <p className="text-sm text-gray-900">{selectedReport.notes}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-medium text-gray-700">Outreach Details</p>
+                    {selectedReport.outreachDetails?.length ? (
+                      selectedReport.outreachDetails.map((detail, index) => (
+                        <div key={index} className="border-t pt-2 mt-2">
+                          <p className="text-sm text-gray-900">
+                            <strong>Full Name:</strong> {detail.fullName}
+                          </p>
+                          <p className="text-sm text-gray-900">
+                            <strong>Address:</strong> {detail.address}
+                          </p>
+                          <p className="text-sm text-gray-900">
+                            <strong>Phone Number:</strong> {detail.phoneNumber}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500">No outreach details available.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
     </div>
   )
 }
