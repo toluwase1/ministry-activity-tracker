@@ -1,48 +1,48 @@
-let userConfig = undefined
-try {
-  userConfig = await import('./v0-user-next.config')
-} catch (e) {
-  // ignore error
-}
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  images: {
-    unoptimized: true,
-  },
-  experimental: {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
-  },
-}
-
-mergeConfig(nextConfig, userConfig)
-
-function mergeConfig(nextConfig, userConfig) {
-  if (!userConfig) {
-    return
-  }
-
-  for (const key in userConfig) {
-    if (
-      typeof nextConfig[key] === 'object' &&
-      !Array.isArray(nextConfig[key])
-    ) {
-      nextConfig[key] = {
-        ...nextConfig[key],
-        ...userConfig[key],
+  reactStrictMode: true,
+  webpack: (config, { isServer }) => {
+    config.optimization.minimizer = config.optimization.minimizer.map(
+      plugin => {
+        if (plugin.constructor.name === 'TerserPlugin') {
+          plugin.options.terserOptions.keep_classnames = true
+          plugin.options.terserOptions.keep_fnames = true
+        }
+        return plugin
       }
-    } else {
-      nextConfig[key] = userConfig[key]
+    )
+
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false
+      }
     }
+    
+    return config
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src * data: blob:",
+              "connect-src *",
+              "font-src 'self'"
+            ].join('; ')
+          }
+        ]
+      }
+    ]
   }
 }
 
-export default nextConfig
+module.exports = nextConfig
