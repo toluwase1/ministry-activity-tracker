@@ -652,8 +652,8 @@ export function ManageFollowUpReports() {
                       onChange={(e) => setEditingReport({ ...editingReport, followUpType: e.target.value })}
                       required
                     >
-                      <option value="Visitation">Visitation</option>
                       <option value="Teaching">Teaching</option>
+                      <option value="Visitation">Visitation</option>
                     </select>
                   </div>
 
