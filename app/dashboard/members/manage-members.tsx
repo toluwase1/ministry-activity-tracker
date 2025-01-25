@@ -2,8 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { API_BASE_URL } from '../../config'
+import { getApiUrl } from '../../utils/api-url'
+import { handleApiResponse } from '../../utils/api-response'
+import { toast } from 'sonner'
 import LoadingSpinner from '../../components/LoadingSpinner'
+
+enum MemberType {
+  Pastor = 'Pastor',
+  WorkersInTraining = 'WorkersInTraining',
+  Disciple = 'Disciple'
+}
 
 interface Member {
   id: string
@@ -12,227 +20,726 @@ interface Member {
   email: string
   phoneNumber: string
   gender: string
-  fellowshipName: string
+  memberType: MemberType
+  disciplerId?: string
+  disciplerFullName?: string
+  fellowshipId: string
+  fellowshipName?: string
+  isActive: boolean
   status: string
 }
 
+interface Fellowship {
+  id: string
+  name: string
+  description?: string
+  status: string
+}
+
+interface MemberFilters {
+  search?: string
+  page: number
+  pageSize: number
+  sortColumn?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
 export function ManageMembers() {
-  const { user } = useAuth()
+  const { token } = useAuth()
+  const [loading, setLoading] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [fellowships, setFellowships] = useState<Fellowship[]>([])
+  const [potentialDisciplers, setPotentialDisciplers] = useState<Member[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [filters, setFilters] = useState<MemberFilters>({
+    page: 1,
+    pageSize: 10,
+    sortColumn: 'firstName',
+    sortOrder: 'asc'
+  })
+  const [newMember, setNewMember] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneNumber: '',
+    gender: '',
+    memberType: MemberType.Pastor,
+    disciplerId: '',
+    fellowshipId: ''
+  })
   const [editingMember, setEditingMember] = useState<Member | null>(null)
-  const [newMember, setNewMember] = useState<Partial<Member>>({})
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
 
-  useEffect(() => {
-    fetchMembers()
-  }, [user])
-
   const fetchMembers = async () => {
-    setLoading(true)
+    if (!token) return
+
     try {
-      const response = await fetch(`${API_BASE_URL}/Member`, {
-        headers: {
-          'Authorization': `Bearer ${user.token}`,
-        },
+      setLoading(true)
+      const queryParams = new URLSearchParams({
+        page: filters.page.toString(),
+        pageSize: filters.pageSize.toString(),
+        ...(filters.search && { search: filters.search }),
+        ...(filters.sortColumn && { sortColumn: filters.sortColumn }),
+        ...(filters.sortOrder && { sortOrder: filters.sortOrder })
       })
+
+      const response = await fetch(getApiUrl(`Member?${queryParams}`), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
+      })
+
       if (!response.ok) {
         throw new Error('Failed to fetch members')
       }
+
       const data = await response.json()
-      if (data.success) {
+      if (handleApiResponse(data)) {
         setMembers(data.result.items)
-      } else {
-        throw new Error(data.message || 'Failed to fetch members')
+        setTotalCount(data.result.totalCount)
       }
     } catch (error) {
-      setError('Error fetching members: ' + error.message)
+      console.error('Error fetching members:', error)
+      toast.error('Failed to load members')
     } finally {
       setLoading(false)
     }
   }
+
+  const fetchFellowships = async () => {
+    if (!token) return
+
+    try {
+      const response = await fetch(getApiUrl('Fellowship'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch fellowships')
+      }
+
+      const data = await response.json()
+      if (handleApiResponse(data)) {
+        setFellowships(data.result.items)
+      }
+    } catch (error) {
+      console.error('Error fetching fellowships:', error)
+      toast.error('Failed to load fellowships')
+    }
+  }
+
+  const fetchPotentialDisciplers = async () => {
+    if (!token) return
+
+    try {
+      const response = await fetch(getApiUrl('Member'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch potential disciplers')
+      }
+
+      const data = await response.json()
+      if (handleApiResponse(data)) {
+        setPotentialDisciplers(data.result.items)
+      }
+    } catch (error) {
+      console.error('Error fetching potential disciplers:', error)
+      toast.error('Failed to load potential disciplers')
+    }
+  }
+
+  useEffect(() => {
+    if (token) {
+      fetchMembers()
+      fetchFellowships()
+      fetchPotentialDisciplers()
+    }
+  }, [token, filters])
 
   const fetchMemberById = async (id: string) => {
-    setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/Member/${id}`, {
+      setLoading(true)
+      const response = await fetch(getApiUrl(`Member/${id}`), {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
-        },
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
       })
-      if (!response.ok) {
-        throw new Error('Failed to fetch member')
-      }
+
       const data = await response.json()
-      if (data.success) {
+      if (handleApiResponse(data) && response.ok) {
         setSelectedMember(data.result)
-      } else {
-        throw new Error(data.message || 'Failed to fetch member')
+        setEditingMember(data.result)
       }
     } catch (error) {
-      setError('Error fetching member: ' + error.message)
+      console.error('Error fetching member:', error)
+      toast.error('Failed to load member details')
     } finally {
       setLoading(false)
     }
   }
 
-  const createMember = async (e: React.FormEvent) => {
+  const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/Member`, {
+      setLoading(true)
+      const response = await fetch(getApiUrl('Member'), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          Accept: 'application/json'
         },
-        body: JSON.stringify(newMember),
+        body: JSON.stringify(newMember)
       })
-      if (!response.ok) {
-        throw new Error('Failed to create member')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        toast.success('Member created successfully')
+        setNewMember({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phoneNumber: '',
+          gender: '',
+          memberType: MemberType.Pastor,
+          disciplerId: '',
+          fellowshipId: ''
+        })
+        await fetchMembers()
       }
-      await fetchMembers()
-      setNewMember({})
     } catch (error) {
-      setError('Error creating member: ' + error.message)
+      console.error('Error creating member:', error)
+      toast.error('Failed to create member')
     } finally {
       setLoading(false)
     }
   }
 
-  const updateMember = async (e: React.FormEvent) => {
+  const handleUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingMember) return
-    setLoading(true)
+
     try {
-      const response = await fetch(`${API_BASE_URL}/Member/${editingMember.id}`, {
-        method: 'PUT',
+      setLoading(true)
+      const response = await fetch(getApiUrl('Member/edit'), {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          Accept: 'application/json'
         },
-        body: JSON.stringify(editingMember),
+        body: JSON.stringify(editingMember)
       })
-      if (!response.ok) {
-        throw new Error('Failed to update member')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        toast.success('Member updated successfully')
+        setEditingMember(null)
+        setSelectedMember(null)
+        await fetchMembers()
       }
-      await fetchMembers()
-      setEditingMember(null)
     } catch (error) {
-      setError('Error updating member: ' + error.message)
+      console.error('Error updating member:', error)
+      toast.error('Failed to update member')
     } finally {
       setLoading(false)
     }
   }
 
-  const deleteMember = async (id: string) => {
-    setLoading(true)
+  const handleDeleteMember = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this member?')) return
+
     try {
-      const response = await fetch(`${API_BASE_URL}/Member/${id}`, {
-        method: 'DELETE',
+      setLoading(true)
+      const response = await fetch(getApiUrl('Member/delete'), {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
         },
+        body: JSON.stringify({ memberId: id })
       })
-      if (!response.ok) {
-        throw new Error('Failed to delete member')
+
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        toast.success('Member deleted successfully')
+        await fetchMembers()
       }
-      await fetchMembers()
     } catch (error) {
-      setError('Error deleting member: ' + error.message)
+      console.error('Error deleting member:', error)
+      toast.error('Failed to delete member')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleFilterChange = (field: keyof MemberFilters, value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      [field]: value
+    }))
   }
 
   if (loading) return <LoadingSpinner />
-  if (error) return <div>Error: {error}</div>
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Manage Members</h2>
-      
-      {/* Create new member form */}
-      <form onSubmit={createMember} className="space-y-4">
-        <input
-          type="text"
-          placeholder="First Name"
-          value={newMember.firstName || ''}
-          onChange={(e) => setNewMember({...newMember, firstName: e.target.value})}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          type="text"
-          placeholder="Last Name"
-          value={newMember.lastName || ''}
-          onChange={(e) => setNewMember({...newMember, lastName: e.target.value})}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          type="email"
-          placeholder="Email"
-          value={newMember.email || ''}
-          onChange={(e) => setNewMember({...newMember, email: e.target.value})}
-          className="w-full p-2 border rounded"
-        />
-        <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded">Add Member</button>
-      </form>
-
-      {/* List of members */}
-      <div className="space-y-4">
-        {members.map((member) => (
-          <div key={member.id} className="p-4 border rounded">
-            {editingMember && editingMember.id === member.id ? (
-              <form onSubmit={updateMember} className="space-y-2">
-                <input
-                  type="text"
-                  value={editingMember.firstName}
-                  onChange={(e) => setEditingMember({...editingMember, firstName: e.target.value})}
-                  className="w-full p-2 border rounded"
-                />
-                <input
-                  type="text"
-                  value={editingMember.lastName}
-                  onChange={(e) => setEditingMember({...editingMember, lastName: e.target.value})}
-                  className="w-full p-2 border rounded"
-                />
-                <input
-                  type="email"
-                  value={editingMember.email}
-                  onChange={(e) => setEditingMember({...editingMember, email: e.target.value})}
-                  className="w-full p-2 border rounded"
-                />
-                <button type="submit" className="px-4 py-2 bg-green-500 text-white rounded">Save</button>
-                <button onClick={() => setEditingMember(null)} className="px-4 py-2 bg-gray-500 text-white rounded ml-2">Cancel</button>
-              </form>
-            ) : (
-              <>
-                <h3 className="font-bold">{member.firstName} {member.lastName}</h3>
-                <p>{member.email}</p>
-                <button onClick={() => setEditingMember(member)} className="px-4 py-2 bg-yellow-500 text-white rounded mt-2">Edit</button>
-                <button onClick={() => deleteMember(member.id)} className="px-4 py-2 bg-red-500 text-white rounded mt-2 ml-2">Delete</button>
-                <button onClick={() => fetchMemberById(member.id)} className="px-4 py-2 bg-blue-500 text-white rounded mt-2 ml-2">View Details</button>
-              </>
-            )}
+      <div className="bg-white shadow sm:rounded-lg p-6">
+        <h2 className="text-lg font-medium mb-4">Create New Member</h2>
+        <form onSubmit={handleCreateMember} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">First Name</label>
+              <input
+                type="text"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.firstName}
+                onChange={(e) => setNewMember({ ...newMember, firstName: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Last Name</label>
+              <input
+                type="text"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.lastName}
+                onChange={(e) => setNewMember({ ...newMember, lastName: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <input
+                type="email"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.email}
+                onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+              <input
+                type="tel"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.phoneNumber}
+                onChange={(e) => setNewMember({ ...newMember, phoneNumber: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Gender</label>
+              <select
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.gender}
+                onChange={(e) => setNewMember({ ...newMember, gender: e.target.value })}
+                required
+              >
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Member Type</label>
+              <select
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.memberType}
+                onChange={(e) => setNewMember({ ...newMember, memberType: e.target.value as MemberType })}
+                required
+              >
+                <option value="">Select Member Type</option>
+                {Object.values(MemberType).map((type) => (
+                  <option key={type} value={type}>
+                    {type === MemberType.WorkersInTraining ? 'Workers In Training' : type}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Fellowship</label>
+              <select
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.fellowshipId}
+                onChange={(e) => setNewMember({ ...newMember, fellowshipId: e.target.value })}
+                required
+              >
+                <option value="">Select Fellowship</option>
+                {fellowships.map((fellowship) => (
+                  <option key={fellowship.id} value={fellowship.id}>
+                    {fellowship.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Discipler</label>
+              <select
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newMember.disciplerId}
+                onChange={(e) => setNewMember({ ...newMember, disciplerId: e.target.value })}
+              >
+                <option value="">Select Discipler (Optional)</option>
+                {potentialDisciplers.map((discipler) => (
+                  <option key={discipler.id} value={discipler.id}>
+                    {discipler.firstName} {discipler.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        ))}
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={loading}
+            >
+              {loading ? 'Creating...' : 'Create Member'}
+            </button>
+          </div>
+        </form>
       </div>
 
-      {/* Selected member details */}
+      <div className="bg-white shadow sm:rounded-lg p-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Search</label>
+            <input
+              type="text"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              value={filters.search || ''}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+              placeholder="Search members..."
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
+          <h2 className="text-lg font-medium">Members</h2>
+          <div className="flex items-center space-x-4">
+            <select
+              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              value={filters.sortColumn}
+              onChange={(e) => handleFilterChange('sortColumn', e.target.value)}
+            >
+              <option value="firstName">First Name</option>
+              <option value="lastName">Last Name</option>
+              <option value="email">Email</option>
+            </select>
+            <select
+              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              value={filters.sortOrder}
+              onChange={(e) => handleFilterChange('sortOrder', e.target.value as 'asc' | 'desc')}
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200">
+          <ul className="divide-y divide-gray-200">
+            {members.map((member) => (
+              <li key={member.id} className="px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {member.firstName} {member.lastName}
+                    </p>
+                    <p className="text-sm text-gray-500">{member.email}</p>
+                    <p className="text-sm text-gray-500">{member.phoneNumber}</p>
+                    <p className="text-sm text-gray-500">{member.memberType}</p>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <button
+                      onClick={() => fetchMemberById(member.id)}
+                      className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setSelectedMember(member)}
+                      className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMember(member.id)}
+                      className="text-red-600 hover:text-red-900 text-sm font-medium"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+          <div className="flex-1 flex justify-between sm:hidden">
+            <button
+              onClick={() => handleFilterChange('page', (filters.page - 1).toString())}
+              disabled={filters.page === 1}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => handleFilterChange('page', (filters.page + 1).toString())}
+              disabled={filters.page * filters.pageSize >= totalCount}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Next
+            </button>
+          </div>
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Showing{' '}
+                <span className="font-medium">
+                  {Math.min((filters.page - 1) * filters.pageSize + 1, totalCount)}
+                </span>{' '}
+                to{' '}
+                <span className="font-medium">
+                  {Math.min(filters.page * filters.pageSize, totalCount)}
+                </span>{' '}
+                of <span className="font-medium">{totalCount}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                <button
+                  onClick={() => handleFilterChange('page', (filters.page - 1).toString())}
+                  disabled={filters.page === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => handleFilterChange('page', (filters.page + 1).toString())}
+                  disabled={filters.page * filters.pageSize >= totalCount}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                >
+                  Next
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {editingMember && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium mb-4">Edit Member</h3>
+            <form onSubmit={handleUpdateMember} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">First Name</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.firstName}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, firstName: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.lastName}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, lastName: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.email}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, email: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                  <input
+                    type="tel"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.phoneNumber}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, phoneNumber: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Gender</label>
+                  <select
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.gender}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, gender: e.target.value })
+                    }
+                    required
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Member Type</label>
+                  <select
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.memberType}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, memberType: e.target.value as MemberType })
+                    }
+                    required
+                  >
+                    <option value="">Select Member Type</option>
+                    {Object.values(MemberType).map((type) => (
+                      <option key={type} value={type}>
+                        {type === MemberType.WorkersInTraining ? 'Workers In Training' : type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Fellowship</label>
+                  <select
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.fellowshipId}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, fellowshipId: e.target.value })
+                    }
+                    required
+                  >
+                    <option value="">Select Fellowship</option>
+                    {fellowships.map((fellowship) => (
+                      <option key={fellowship.id} value={fellowship.id}>
+                        {fellowship.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Discipler</label>
+                  <select
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={editingMember.disciplerId}
+                    onChange={(e) =>
+                      setEditingMember({ ...editingMember, disciplerId: e.target.value })
+                    }
+                  >
+                    <option value="">Select Discipler (Optional)</option>
+                    {potentialDisciplers.map((discipler) => (
+                      <option key={discipler.id} value={discipler.id}>
+                        {discipler.firstName} {discipler.lastName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingMember(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                  disabled={loading}
+                >
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Modal */}
       {selectedMember && (
-        <div className="mt-6 p-4 border rounded">
-          <h3 className="text-xl font-bold mb-2">Selected Member Details</h3>
-          <p><strong>Name:</strong> {selectedMember.firstName} {selectedMember.lastName}</p>
-          <p><strong>Email:</strong> {selectedMember.email}</p>
-          <p><strong>Phone:</strong> {selectedMember.phoneNumber}</p>
-          <p><strong>Gender:</strong> {selectedMember.gender}</p>
-          <p><strong>Fellowship:</strong> {selectedMember.fellowshipName}</p>
-          <p><strong>Status:</strong> {selectedMember.status}</p>
-          <button onClick={() => setSelectedMember(null)} className="px-4 py-2 bg-gray-500 text-white rounded mt-2">Close</button>
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4"
+          tabIndex={-1}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setSelectedMember(null);
+          }}
+        >
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Member Details</h3>
+              <button
+                onClick={() => setSelectedMember(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700">First Name</p>
+                <p className="text-sm text-gray-900">{selectedMember.firstName}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Last Name</p>
+                <p className="text-sm text-gray-900">{selectedMember.lastName}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Email</p>
+                <p className="text-sm text-gray-900">{selectedMember.email}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Phone Number</p>
+                <p className="text-sm text-gray-900">{selectedMember.phoneNumber}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Gender</p>
+                <p className="text-sm text-gray-900">{selectedMember.gender}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Member Type</p>
+                <p className="text-sm text-gray-900">{selectedMember.memberType}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-sm font-medium text-gray-700">Fellowship Name</p>
+                <p className="text-sm text-gray-900">{selectedMember.fellowshipName}</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
-  )
+  );
 }
-
