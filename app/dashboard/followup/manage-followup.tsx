@@ -23,21 +23,34 @@ interface Activity {
 }
 
 interface FollowUpDetail {
+  memberId: string
+  activityId: string
+  followUpType: string
   fullName: string
   notes: string
+  date: string
 }
 
-interface FollowUpReport {
+interface FollowUpReportItem {
   id: string
   memberId: string
   memberFullName: string
   activityId: string
   activityName: string
-  followUpType: string
   totalFollowUps: number
-  notes: string
-  date: string
-  followUpDetails: FollowUpDetail[]
+}
+
+interface ApiResponse {
+  result: {
+    items: FollowUpReportItem[]
+    totalCount: number
+    totalPages: number
+    currentPage: number
+    pageSize: number
+  }
+  success: boolean
+  message: string
+  validationErrors: null | string[]
 }
 
 interface FollowUpFilters {
@@ -51,37 +64,51 @@ interface FollowUpFilters {
   sortOrder?: 'asc' | 'desc'
 }
 
+interface FollowUpReport {
+  id: string
+  memberId: string
+  memberFullName: string
+  activityId: string
+  activityName: string
+  followUpType: string
+  notes: string
+  date: string
+  fullName: string
+}
+
 export function ManageFollowUpReports() {
   const { token } = useAuth()
   const [loading, setLoading] = useState(false)
-  const [followUpReports, setFollowUpReports] = useState<FollowUpReport[]>([])
+  const [followUpReports, setFollowUpReports] = useState<FollowUpReportItem[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [filters, setFilters] = useState<FollowUpFilters>({
     page: 1,
-    pageSize: 10,
+    pageSize: 50,
     sortColumn: 'date',
     sortOrder: 'desc'
   })
   const [newReport, setNewReport] = useState({
-    memberId: '',
-    activityId: '',
-    followUpType: 'Teaching',
-    totalFollowUps: 0,
-    notes: '',
-    date: new Date().toISOString(),
-    followUpDetails: [{ fullName: '', notes: '' }]
+    followUpDetails: [{
+      memberId: '',
+      activityId: '',
+      followUpType: 'Visitation',
+      fullName: '',
+      notes: '',
+      date: new Date().toISOString()
+    }]
   })
   const [editingReport, setEditingReport] = useState<{
     reportId: string
-    memberId: string
-    activityId: string
-    followUpType: string
-    totalFollowUps: number
-    notes: string
-    date: string
-    followUpDetails: FollowUpDetail[]
+    followUpDetails: {
+      memberId: string
+      activityId: string
+      followUpType: string
+      fullName: string
+      notes: string
+      date: string
+    }[]
   } | null>(null)
   const [selectedReport, setSelectedReport] = useState<FollowUpReport | null>(null)
 
@@ -135,14 +162,14 @@ export function ManageFollowUpReports() {
     try {
       setLoading(true)
       const queryParams = new URLSearchParams({
-        page: filters.page.toString(),
-        pageSize: filters.pageSize.toString(),
-        ...(filters.memberId && { memberId: filters.memberId }),
-        ...(filters.search && { search: filters.search }),
-        ...(filters.startDate && { startDate: filters.startDate }),
-        ...(filters.endDate && { endDate: filters.endDate }),
-        ...(filters.sortColumn && { sortColumn: filters.sortColumn }),
-        ...(filters.sortOrder && { sortOrder: filters.sortOrder })
+        Page: filters.page.toString(),
+        PageSize: filters.pageSize.toString(),
+        ...(filters.memberId && { MemberId: filters.memberId }),
+        ...(filters.search && { Search: filters.search }),
+        ...(filters.startDate && { StartDate: filters.startDate }),
+        ...(filters.endDate && { EndDate: filters.endDate }),
+        ...(filters.sortColumn && { SortColumn: filters.sortColumn }),
+        ...(filters.sortOrder && { SortOrder: filters.sortOrder })
       })
 
       const response = await fetch(getApiUrl(`FollowupReport?${queryParams}`), {
@@ -152,10 +179,13 @@ export function ManageFollowUpReports() {
         }
       })
 
-      const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
+      const data: ApiResponse = await response.json()
+      
+      if (data.success) {
         setFollowUpReports(data.result.items)
         setTotalCount(data.result.totalCount)
+      } else {
+        toast.error(data.message || 'Failed to load follow-up reports')
       }
     } catch (error) {
       console.error('Error fetching follow-up reports:', error)
@@ -183,13 +213,14 @@ export function ManageFollowUpReports() {
       if (handleApiResponse(data) && response.ok) {
         toast.success('Follow-up report created successfully')
         setNewReport({
-          memberId: '',
-          activityId: '',
-          followUpType: 'Visitation',
-          totalFollowUps: 0,
-          notes: '',
-          date: new Date().toISOString(),
-          followUpDetails: [{ fullName: '', notes: '' }]
+          followUpDetails: [{
+            memberId: '',
+            activityId: '',
+            followUpType: 'Visitation',
+            fullName: '',
+            notes: '',
+            date: new Date().toISOString()
+          }]
         })
         await fetchFollowUpReports()
       }
@@ -265,12 +296,26 @@ export function ManageFollowUpReports() {
     if (editingReport) {
       setEditingReport({
         ...editingReport,
-        followUpDetails: [...editingReport.followUpDetails, { fullName: '', notes: '' }]
+        followUpDetails: [...editingReport.followUpDetails, {
+          memberId: '',
+          activityId: '',
+          followUpType: 'Visitation',
+          fullName: '',
+          notes: '',
+          date: new Date().toISOString()
+        }]
       })
     } else {
       setNewReport({
         ...newReport,
-        followUpDetails: [...newReport.followUpDetails, { fullName: '', notes: '' }]
+        followUpDetails: [...newReport.followUpDetails, {
+          memberId: '',
+          activityId: '',
+          followUpType: 'Visitation',
+          fullName: '',
+          notes: '',
+          date: new Date().toISOString()
+        }]
       })
     }
   }
@@ -325,91 +370,10 @@ export function ManageFollowUpReports() {
   return (
     <div className="space-y-6">
       {/* Create New Follow-Up Report Form */}
+   
       <div className="bg-white shadow sm:rounded-lg p-6">
         <h2 className="text-lg font-medium mb-4">Create New Follow-Up Report</h2>
         <form onSubmit={handleCreateReport} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Member</label>
-              <select
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={newReport.memberId}
-                onChange={(e) => setNewReport({ ...newReport, memberId: e.target.value })}
-                required
-              >
-                <option value="">Select Member</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Activity</label>
-              <select
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={newReport.activityId}
-                onChange={(e) => setNewReport({ ...newReport, activityId: e.target.value })}
-                required
-              >
-                <option value="">Select Activity</option>
-                {activities.map((activity) => (
-                  <option key={activity.id} value={activity.id}>
-                    {activity.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Follow-Up Type</label>
-              <select
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={newReport.followUpType}
-                onChange={(e) => setNewReport({ ...newReport, followUpType: e.target.value })}
-                required
-              >
-                <option value="Visitation">Visitation</option>
-                <option value="Teaching">Teaching</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Total Follow-Ups</label>
-              <input
-                type="number"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={newReport.totalFollowUps}
-                onChange={(e) => setNewReport({ ...newReport, totalFollowUps: parseInt(e.target.value) })}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Date</label>
-              <input
-                type="datetime-local"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={new Date(newReport.date).toISOString().slice(0, 16)}
-                onChange={(e) => setNewReport({ ...newReport, date: new Date(e.target.value).toISOString() })}
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Notes</label>
-            <textarea
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              value={newReport.notes}
-              onChange={(e) => setNewReport({ ...newReport, notes: e.target.value })}
-              rows={3}
-            />
-          </div>
-
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium">Follow-Up Details</h3>
@@ -439,6 +403,53 @@ export function ManageFollowUpReports() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
+                    <label className="block text-sm font-medium text-gray-700">Member</label>
+                    <select
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      value={detail.memberId}
+                      onChange={(e) => handleFollowUpDetailChange(index, 'memberId', e.target.value)}
+                      required
+                    >
+                      <option value="">Select Member</option>
+                      {members.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.firstName} {member.lastName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Activity</label>
+                    <select
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      value={detail.activityId}
+                      onChange={(e) => handleFollowUpDetailChange(index, 'activityId', e.target.value)}
+                      required
+                    >
+                      <option value="">Select Activity</option>
+                      {activities.map((activity) => (
+                        <option key={activity.id} value={activity.id}>
+                          {activity.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Follow-Up Type</label>
+                    <select
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      value={detail.followUpType}
+                      onChange={(e) => handleFollowUpDetailChange(index, 'followUpType', e.target.value)}
+                      required
+                    >
+                      <option value="Visitation">Visitation</option>
+                      <option value="Teaching">Teaching</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-700">Full Name</label>
                     <input
                       type="text"
@@ -456,6 +467,17 @@ export function ManageFollowUpReports() {
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={detail.notes}
                       onChange={(e) => handleFollowUpDetailChange(index, 'notes', e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Date</label>
+                    <input
+                      type="datetime-local"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      value={new Date(detail.date).toISOString().slice(0, 16)}
+                      onChange={(e) => handleFollowUpDetailChange(index, 'date', new Date(e.target.value).toISOString())}
                       required
                     />
                   </div>
@@ -513,7 +535,7 @@ export function ManageFollowUpReports() {
                       {new Date(report.date).toLocaleString()}
                     </p>
                     <p className="text-sm text-gray-500">
-                      Total Follow-Ups: {report.totalFollowUps}
+                      {report.fullName}
                     </p>
                   </div>
                   <div className="flex items-center space-x-4">
@@ -526,13 +548,14 @@ export function ManageFollowUpReports() {
                     <button
                       onClick={() => setEditingReport({
                         reportId: report.id,
-                        memberId: report.memberId,
-                        activityId: report.activityId,
-                        followUpType: report.followUpType,
-                        totalFollowUps: report.totalFollowUps,
-                        notes: report.notes,
-                        date: report.date,
-                        followUpDetails: report.followUpDetails
+                        followUpDetails: [{
+                          memberId: report.memberId,
+                          activityId: report.activityId,
+                          followUpType: report.followUpType,
+                          fullName: report.fullName,
+                          notes: report.notes,
+                          date: report.date
+                        }]
                       })}
                       className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
                     >
@@ -611,86 +634,6 @@ export function ManageFollowUpReports() {
             <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
               <h3 className="text-lg font-medium mb-4">Edit Follow-Up Report</h3>
               <form onSubmit={handleUpdateReport} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Member</label>
-                    <select
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={editingReport.memberId}
-                      onChange={(e) => setEditingReport({ ...editingReport, memberId: e.target.value })}
-                      required
-                    >
-                      {members.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.firstName} {member.lastName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Activity</label>
-                    <select
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={editingReport.activityId}
-                      onChange={(e) => setEditingReport({ ...editingReport, activityId: e.target.value })}
-                      required
-                    >
-                      {activities.map((activity) => (
-                        <option key={activity.id} value={activity.id}>
-                          {activity.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Follow-Up Type</label>
-                    <select
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={editingReport.followUpType}
-                      onChange={(e) => setEditingReport({ ...editingReport, followUpType: e.target.value })}
-                      required
-                    >
-                      <option value="Teaching">Teaching</option>
-                      <option value="Visitation">Visitation</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Total Follow-Ups</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={editingReport.totalFollowUps}
-                      onChange={(e) => setEditingReport({ ...editingReport, totalFollowUps: parseInt(e.target.value) })}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Date</label>
-                    <input
-                      type="datetime-local"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={new Date(editingReport.date).toISOString().slice(0, 16)}
-                      onChange={(e) => setEditingReport({ ...editingReport, date: new Date(e.target.value).toISOString() })}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Notes</label>
-                  <textarea
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    value={editingReport.notes}
-                    onChange={(e) => setEditingReport({ ...editingReport, notes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-medium">Follow-Up Details</h3>
@@ -720,6 +663,51 @@ export function ManageFollowUpReports() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
+                          <label className="block text-sm font-medium text-gray-700">Member</label>
+                          <select
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            value={detail.memberId}
+                            onChange={(e) => handleFollowUpDetailChange(index, 'memberId', e.target.value)}
+                            required
+                          >
+                            {members.map((member) => (
+                              <option key={member.id} value={member.id}>
+                                {member.firstName} {member.lastName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Activity</label>
+                          <select
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            value={detail.activityId}
+                            onChange={(e) => handleFollowUpDetailChange(index, 'activityId', e.target.value)}
+                            required
+                          >
+                            {activities.map((activity) => (
+                              <option key={activity.id} value={activity.id}>
+                                {activity.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Follow-Up Type</label>
+                          <select
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            value={detail.followUpType}
+                            onChange={(e) => handleFollowUpDetailChange(index, 'followUpType', e.target.value)}
+                            required
+                          >
+                            <option value="Teaching">Teaching</option>
+                            <option value="Visitation">Visitation</option>
+                          </select>
+                        </div>
+
+                        <div>
                           <label className="block text-sm font-medium text-gray-700">Full Name</label>
                           <input
                             type="text"
@@ -737,6 +725,17 @@ export function ManageFollowUpReports() {
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                             value={detail.notes}
                             onChange={(e) => handleFollowUpDetailChange(index, 'notes', e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Date</label>
+                          <input
+                            type="datetime-local"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            value={new Date(detail.date).toISOString().slice(0, 16)}
+                            onChange={(e) => handleFollowUpDetailChange(index, 'date', new Date(e.target.value).toISOString())}
                             required
                           />
                         </div>
@@ -797,25 +796,12 @@ export function ManageFollowUpReports() {
                   <p className="text-sm text-gray-900">{new Date(selectedReport.date).toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Total Follow-Ups</p>
-                  <p className="text-sm text-gray-900">{selectedReport.totalFollowUps}</p>
+                  <p className="text-sm font-medium text-gray-700">Full Name</p>
+                  <p className="text-sm text-gray-900">{selectedReport.fullName}</p>
                 </div>
                 <div className="md:col-span-2">
                   <p className="text-sm font-medium text-gray-700">Notes</p>
                   <p className="text-sm text-gray-900">{selectedReport.notes}</p>
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-sm font-medium text-gray-700">Follow-Up Details</p>
-                  {selectedReport.followUpDetails.map((detail, index) => (
-                    <div key={index} className="border-t pt-2 mt-2">
-                      <p className="text-sm text-gray-900">
-                        <strong>Full Name:</strong> {detail.fullName}
-                      </p>
-                      <p className="text-sm text-gray-900">
-                        <strong>Notes:</strong> {detail.notes}
-                      </p>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
