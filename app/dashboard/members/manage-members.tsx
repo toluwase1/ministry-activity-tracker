@@ -165,7 +165,9 @@ export function ManageMembers() {
     }
   }, [token, filters])
 
-  const fetchMemberById = async (id: string) => {
+  const fetchMemberForView = async (id: string) => {
+    if (!token) return
+
     try {
       setLoading(true)
       const response = await fetch(getApiUrl(`Member/${id}`), {
@@ -175,9 +177,40 @@ export function ManageMembers() {
         }
       })
 
+      if (!response.ok) {
+        throw new Error('Failed to fetch member details')
+      }
+
       const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
+      if (handleApiResponse(data)) {
         setSelectedMember(data.result)
+      }
+    } catch (error) {
+      console.error('Error fetching member:', error)
+      toast.error('Failed to load member details')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchMemberForEdit = async (id: string) => {
+    if (!token) return
+
+    try {
+      setLoading(true)
+      const response = await fetch(getApiUrl(`Member/${id}`), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch member details')
+      }
+
+      const data = await response.json()
+      if (handleApiResponse(data)) {
         setEditingMember(data.result)
       }
     } catch (error) {
@@ -466,20 +499,20 @@ export function ManageMembers() {
                   </div>
                   <div className="flex items-center space-x-4">
                     <button
-                      onClick={() => fetchMemberById(member.id)}
-                      className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => setSelectedMember(member)}
-                      className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                      onClick={() => fetchMemberForView(member.id)}
+                      className="text-indigo-600 hover:text-indigo-900"
                     >
                       View
                     </button>
                     <button
+                      onClick={() => fetchMemberForEdit(member.id)}
+                      className="text-green-600 hover:text-green-900"
+                    >
+                      Edit
+                    </button>
+                    <button
                       onClick={() => handleDeleteMember(member.id)}
-                      className="text-red-600 hover:text-red-900 text-sm font-medium"
+                      className="text-red-600 hover:text-red-900"
                     >
                       Delete
                     </button>

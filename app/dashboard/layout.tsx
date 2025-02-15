@@ -20,6 +20,11 @@ export default function DashboardLayout({
             <span className="text-white font-bold uppercase">Church Dashboard</span>
           </div>
           <ul className="flex-1 px-2">
+          <li className="py-2">
+              <Link href="/dashboard/reports" className="text-gray-300 hover:text-white block">
+                Reports
+              </Link>
+            </li>
             <li className="py-2">
               <Link href="/dashboard" className="text-gray-300 hover:text-white block">
                 Overview
