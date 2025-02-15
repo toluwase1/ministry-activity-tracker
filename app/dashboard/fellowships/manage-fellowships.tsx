@@ -16,7 +16,7 @@ interface Fellowship {
 }
 
 function ManageFellowships() {
-  const { user } = useAuth()
+  const { token } = useAuth()
   const [fellowships, setFellowships] = useState<Fellowship[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -26,20 +26,20 @@ function ManageFellowships() {
 
   useEffect(() => {
     fetchFellowships()
-  }, [user])
+  }, [token])
 
   const fetchFellowships = async () => {
     setLoading(true)
     try {
       const response = await fetch(`${API_BASE_URL}/api/Fellowship`, {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
       const data: ApiResponse<{ items: Fellowship[] }> = await response.json()
       console.log('Fellowships response:', data)
 
-      if (handleApiResponse(data) && response.ok) {
+      if (handleApiResponse(data) && response.ok && data.result) {
         setFellowships(data.result.items)
       }
     } catch (err) {
@@ -55,14 +55,14 @@ function ManageFellowships() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/Fellowship/${id}`, {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
       const data: ApiResponse<{ result: Fellowship }> = await response.json()
       console.log('Fellowship response:', data)
 
-      if (handleApiResponse(data) && response.ok) {
-        setSelectedFellowship(data.result)
+      if (handleApiResponse(data) && response.ok && data.result) {
+        setSelectedFellowship(data.result.result)
       }
     } catch (err) {
       console.error('Error fetching fellowship:', err)
@@ -79,7 +79,7 @@ function ManageFellowships() {
       const response = await fetch(`${API_BASE_URL}/api/Fellowship`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(newFellowship),
@@ -107,7 +107,7 @@ function ManageFellowships() {
       const response = await fetch(`${API_BASE_URL}/api/Fellowship/${editingFellowship.id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(editingFellowship),
@@ -136,7 +136,7 @@ function ManageFellowships() {
       const response = await fetch(`${API_BASE_URL}/api/Fellowship/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
       const data: ApiResponse = await response.json()
