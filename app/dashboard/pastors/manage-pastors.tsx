@@ -22,7 +22,7 @@ interface PendingUser {
 }
 
 export function ManagePastors() {
-  const { user } = useAuth()
+  const { token } = useAuth()
   const [pastors, setPastors] = useState<Pastor[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -34,14 +34,14 @@ export function ManagePastors() {
   useEffect(() => {
     fetchPastors()
     fetchPendingApprovals();
-  }, [user])
+  }, [token])
 
   const fetchPastors = async () => {
     setLoading(true)
     try {
       const response = await fetch(`${API_BASE_URL}/Pastor`, {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
       if (!response.ok) {
@@ -54,7 +54,7 @@ export function ManagePastors() {
         throw new Error(data.message || 'Failed to fetch pastors')
       }
     } catch (error) {
-      setError('Error fetching pastors: ' + error.message)
+      setError('Error fetching pastors: ' + error)
     } finally {
       setLoading(false)
     }
@@ -65,7 +65,7 @@ export function ManagePastors() {
     try {
       const response = await fetch(`${API_BASE_URL}/Auth/pending`, {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       });
       if (!response.ok) {
@@ -73,12 +73,12 @@ export function ManagePastors() {
       }
       const data = await response.json();
       if (data.success) {
-        setPendingApprovals(data.result);
+        setPendingApprovals(data.result.items)
       } else {
         throw new Error(data.message || 'Failed to fetch pending approvals');
       }
     } catch (error) {
-      setError('Error fetching pending approvals: ' + error.message);
+      setError('Error fetching pending approvals: ' + error);
     } finally {
       setLoading(false)
     }
@@ -89,7 +89,7 @@ export function ManagePastors() {
     try {
       const response = await fetch(`${API_BASE_URL}/Pastor/${id}`, {
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
       if (!response.ok) {
@@ -97,12 +97,12 @@ export function ManagePastors() {
       }
       const data = await response.json()
       if (data.success) {
-        setSelectedPastor(data.result)
+        setSelectedPastor(data.result.result)
       } else {
         throw new Error(data.message || 'Failed to fetch pastor')
       }
     } catch (error) {
-      setError('Error fetching pastor: ' + error.message)
+      setError('Error fetching pastor: ' + error)
     } finally {
       setLoading(false)
     }
@@ -115,7 +115,7 @@ export function ManagePastors() {
       const response = await fetch(`${API_BASE_URL}/Pastor`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(newPastor),
@@ -126,7 +126,7 @@ export function ManagePastors() {
       await fetchPastors()
       setNewPastor({})
     } catch (error) {
-      setError('Error creating pastor: ' + error.message)
+      setError('Error creating pastor: ' + error)
     } finally {
       setLoading(false)
     }
@@ -140,7 +140,7 @@ export function ManagePastors() {
       const response = await fetch(`${API_BASE_URL}/Pastor/${editingPastor.id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(editingPastor),
@@ -151,7 +151,7 @@ export function ManagePastors() {
       await fetchPastors()
       setEditingPastor(null)
     } catch (error) {
-      setError('Error updating pastor: ' + error.message)
+      setError('Error updating pastor: ' + error)
     } finally {
       setLoading(false)
     }
@@ -163,7 +163,7 @@ export function ManagePastors() {
       const response = await fetch(`${API_BASE_URL}/Pastor/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
       if (!response.ok) {
@@ -171,7 +171,7 @@ export function ManagePastors() {
       }
       await fetchPastors()
     } catch (error) {
-      setError('Error deleting pastor: ' + error.message)
+      setError('Error deleting pastor: ' + error)
     } finally {
       setLoading(false)
     }
@@ -183,7 +183,7 @@ export function ManagePastors() {
       const response = await fetch(`${API_BASE_URL}/Auth/approve/${userId}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user.token}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
       if (!response.ok) {
@@ -191,7 +191,7 @@ export function ManagePastors() {
       }
       await fetchPendingApprovals();
     } catch (error) {
-      setError('Error approving user: ' + error.message)
+      setError('Error approving user: ' + error)
     } finally {
       setLoading(false)
     }
@@ -331,4 +331,3 @@ export function ManagePastors() {
     </div>
   )
 }
-
