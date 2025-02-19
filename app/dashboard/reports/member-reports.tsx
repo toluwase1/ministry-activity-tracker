@@ -46,8 +46,26 @@ interface ProcessedReport {
   records: AttendanceRecord[];
 }
 
+interface AnalysisReport {
+  activity: string
+  frequency: number
+  totalAttendees: number
+  count100: number
+  count75: number
+  count50: number
+  countBelow50: number
+  membersWithDisciples: number
+}
+
+interface AnalysisResponse {
+  result: AnalysisReport[]
+  success: boolean
+  message: string
+  validationErrors: null | string[]
+}
+
 export function MemberReports() {
-  const { token } = useAuth()
+  const { token, userData } = useAuth()
   const [loading, setLoading] = useState(false)
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const lastWeek = new Date()
@@ -60,6 +78,8 @@ export function MemberReports() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [reportData, setReportData] = useState<AttendanceReport | null>(null)
+  const [analysisData, setAnalysisData] = useState<AnalysisReport[]>([])
+  const [selectedPeriod, setSelectedPeriod] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly'>('Daily')
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set())
 
   // Add toggle function for expanding/collapsing member sections
@@ -230,6 +250,57 @@ export function MemberReports() {
       setLoading(false)
     }
   };
+
+  const handleAnalysisReport = async () => {
+    try {
+      setLoading(true)
+      
+      // Format dates as YYYY-MM-DD
+      const formattedStartDate = startDate ? startDate.toISOString().split('T')[0] : ''
+      const formattedEndDate = endDate ? endDate.toISOString().split('T')[0] : ''
+      
+      const queryParams = new URLSearchParams()
+      
+      if (formattedStartDate) {
+        queryParams.append('StartDate', formattedStartDate)
+      }
+      if (formattedEndDate) {
+        queryParams.append('EndDate', formattedEndDate)
+      }
+      if (selectedActivities.length > 0) {
+        queryParams.append('ActivityIds', selectedActivities.join(','))
+      }
+      if (userData?.groupId) {
+        queryParams.append('FellowshipId', userData.groupId)
+      }
+      
+      // Always include Period parameter
+      queryParams.append('Period', selectedPeriod)
+
+      const response = await fetch(getApiUrl(`StandardReport/analysis-report?${queryParams}`), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      })
+
+      const data: AnalysisResponse = await response.json()
+      console.log('Analysis Report Response:', data) // Add this for debugging
+      
+      if (response.ok && data.success) {
+        setAnalysisData(data.result)
+        toast.success('Analysis report generated successfully')
+      } else {
+        toast.error(data.message || 'Failed to generate analysis report')
+      }
+    } catch (error) {
+      console.error('Error generating analysis report:', error)
+      toast.error('Failed to generate analysis report')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -408,6 +479,148 @@ export function MemberReports() {
           </p>
         </div>
       )}
+
+      {/* Analysis Report Section */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Analysis Report</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Period
+            </label>
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value as typeof selectedPeriod)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="Daily">Daily</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Quarterly">Quarterly</option>
+              <option value="Yearly">Yearly</option>
+            </select>
+          </div>
+          
+          {/* Reuse the same date and activity filters from above */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Start Date
+            </label>
+            <DatePicker
+              selected={startDate}
+              onChange={setStartDate}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              placeholderText="Select start date"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              End Date
+            </label>
+            <DatePicker
+              selected={endDate}
+              onChange={setEndDate}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              placeholderText="Select end date"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Activities
+            </label>
+            <select
+              multiple
+              value={selectedActivities}
+              onChange={(e) => {
+                const values = Array.from(e.target.selectedOptions, option => option.value)
+                setSelectedActivities(values)
+              }}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              {activities.map((activity) => (
+                <option key={activity.id} value={activity.id}>
+                  {activity.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={handleAnalysisReport}
+            disabled={loading}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            {loading ? 'Generating...' : 'Generate Analysis'}
+          </button>
+        </div>
+
+        {analysisData.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Activity
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Frequency
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total Attendees
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    100% Attendance
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    75% Attendance
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    50% Attendance
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Below 50%
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Members with Disciples
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {analysisData.map((item, index) => (
+                  <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {item.activity}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.frequency}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.totalAttendees}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.count100}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.count75}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.count50}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.countBelow50}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {item.membersWithDisciples}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
