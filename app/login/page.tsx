@@ -14,6 +14,7 @@ interface LoginResponse {
   accessToken: string;
   refreshToken: string | null;
   expiredAt: string;
+  userData: any;
 }
 
 export default function Login() {
@@ -49,27 +50,18 @@ export default function Login() {
         body: JSON.stringify({
           email,
           password,
-          memberType: Number(memberType), // Ensure memberType is sent as a number
-        }),
+          memberType
+        })
       })
 
-      const data: ApiResponse<LoginResponse> = await response.json()
-      console.log('Login response:', data)
-
-      if (!data.success) {
-        toast.error(data.message || 'Login failed')
-        return
+      const data = await response.json()
+      if (handleApiResponse(data) && response.ok) {
+        await login(data.result.accessToken, data.result.userData)
+        toast.success('Successfully logged in!')
       }
-
-      if (response.ok && data.result?.accessToken) {
-        await login(data.result.accessToken)
-        toast.success('Successfully logged in')
-      } else {
-        toast.error('Invalid response from server: No access token received')
-      }
-    } catch (err) {
-      console.error('Login error:', err)
-      toast.error('Failed to log in. Please try again.')
+    } catch (error) {
+      console.error('Login error:', error)
+      toast.error('Failed to log in')
     } finally {
       setLoading(false)
     }

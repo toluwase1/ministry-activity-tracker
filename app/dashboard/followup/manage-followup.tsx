@@ -75,18 +75,18 @@ interface FollowUpFilters {
 }
 
 export function ManageFollowUpReports() {
-  const { token } = useAuth()
+  const { token, userData } = useAuth()
   const [loading, setLoading] = useState(false)
   const [followUpReports, setFollowUpReports] = useState<FollowUpReport[]>([])
-  const [members, setMembers] = useState<Member[]>([])
+  const [currentMember, setCurrentMember] = useState<Member | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [filters, setFilters] = useState<FollowUpFilters>({
-    startDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0], // Last month
-    endDate: new Date().toISOString().split('T')[0], // Today
+    startDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
     page: 1,
     pageSize: 50,
-    sortColumn: 'CreatedAt', // Default sort by date
+    sortColumn: 'CreatedAt',
     sortOrder: 'desc'
   })
   const [newReport, setNewReport] = useState({
@@ -115,12 +115,12 @@ export function ManageFollowUpReports() {
   const [loadingDetails, setLoadingDetails] = useState(false)
 
   useEffect(() => {
-    if (token) {
-      fetchMembers()
+    if (token && userData?.userId) {
+      fetchCurrentMember()
       fetchActivities()
       fetchFollowUpReports()
     }
-  }, [token, filters])
+  }, [token, userData, filters])
 
   useEffect(() => {
     if (selectedReport?.id) {
@@ -130,9 +130,11 @@ export function ManageFollowUpReports() {
     }
   }, [selectedReport])
 
-  const fetchMembers = async () => {
+  const fetchCurrentMember = async () => {
+    if (!userData?.userId) return
+    
     try {
-      const response = await fetch(getApiUrl('Member'), {
+      const response = await fetch(getApiUrl(`Member/${userData.userId}`), {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json'
@@ -141,11 +143,19 @@ export function ManageFollowUpReports() {
 
       const data = await response.json()
       if (handleApiResponse(data) && response.ok) {
-        setMembers(Array.isArray(data.result.items) ? data.result.items : [])
+        setCurrentMember(data.result)
+        // Pre-populate the new report with the current member's information
+        setNewReport(prev => ({
+          followUpDetails: prev.followUpDetails.map(detail => ({
+            ...detail,
+            memberId: userData.userId,
+            fullName: userData.fullName
+          }))
+        }))
       }
     } catch (error) {
-      console.error('Error fetching members:', error)
-      toast.error('Failed to load members')
+      console.error('Error fetching current member:', error)
+      toast.error('Failed to load member information')
     }
   }
 
@@ -506,11 +516,11 @@ export function ManageFollowUpReports() {
                       required
                     >
                       <option value="">Select Member</option>
-                      {members.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.firstName} {member.lastName}
+                      {currentMember && (
+                        <option key={currentMember.id} value={currentMember.id}>
+                          {currentMember.firstName} {currentMember.lastName}
                         </option>
-                      ))}
+                      )}
                     </select>
                   </div>
 
@@ -611,11 +621,11 @@ export function ManageFollowUpReports() {
               onChange={(e) => handleFilterChange('memberId', e.target.value)}
             >
               <option value="">All Members</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.firstName} {member.lastName}
+              {currentMember && (
+                <option key={currentMember.id} value={currentMember.id}>
+                  {currentMember.firstName} {currentMember.lastName}
                 </option>
-              ))}
+              )}
             </select>
             <div className="flex items-center space-x-2">
               <input
@@ -805,11 +815,11 @@ export function ManageFollowUpReports() {
                           onChange={(e) => handleFollowUpDetailChange(index, 'memberId', e.target.value)}
                           required
                         >
-                          {members.map((member) => (
-                            <option key={member.id} value={member.id}>
-                              {member.firstName} {member.lastName}
+                          {currentMember && (
+                            <option key={currentMember.id} value={currentMember.id}>
+                              {currentMember.firstName} {currentMember.lastName}
                             </option>
-                          ))}
+                          )}
                         </select>
                       </div>
 
