@@ -182,6 +182,55 @@ export function MemberReports() {
     }
   };
 
+  const handleExportToExcel = async () => {
+    try {
+      setLoading(true)
+      const queryParams = new URLSearchParams({
+        ExportType: 'excel',
+        ...(startDate && { StartDate: startDate.toISOString() }),
+        ...(endDate && { EndDate: endDate.toISOString() }),
+        ...(selectedActivities.length > 0 && { ActivityIds: selectedActivities.join(',') }),
+        ...(memberId && { MemberId: memberId })
+      })
+
+      const response = await fetch(getApiUrl(`StandardReport/attendance-report/export?${queryParams}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to export report')
+      }
+
+      // Get filename from content-disposition header or use default
+      const contentDisposition = response.headers.get('content-disposition')
+      const filename = contentDisposition
+        ? contentDisposition.split('filename=')[1].replace(/"/g, '')
+        : 'attendance-report.xlsx'
+
+      // Create blob from response and trigger download
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast.success('Report exported successfully')
+    } catch (error) {
+      console.error('Error exporting report:', error)
+      toast.error('Failed to export report')
+    } finally {
+      setLoading(false)
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
@@ -262,11 +311,11 @@ export function MemberReports() {
           </div>
         </div>
 
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-end space-x-2 mt-4">
           <button
             onClick={fetchReport}
             disabled={loading}
-            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors duration-200"
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             {loading ? (
               <span className="flex items-center">
@@ -276,6 +325,13 @@ export function MemberReports() {
             ) : (
               'Generate Report'
             )}
+          </button>
+          <button
+            onClick={handleExportToExcel}
+            disabled={loading}
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          >
+            {loading ? 'Exporting...' : 'Export to Excel'}
           </button>
         </div>
       </div>
