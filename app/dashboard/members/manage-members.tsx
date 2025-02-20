@@ -7,6 +7,12 @@ import { handleApiResponse } from '../../utils/api-response'
 import { toast } from 'sonner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
+enum MemberTypeEnum {
+  Pastor = 'Pastor',
+  WorkersInTraining = 'WorkersInTraining',
+  Disciple = 'Disciple'
+}
+
 enum MemberType {
   Pastor = 'Pastor',
   WorkersInTraining = 'WorkersInTraining',
@@ -69,6 +75,11 @@ export function ManageMembers() {
   })
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
+  const [approvalData, setApprovalData] = useState({
+    memberType: MemberTypeEnum.Disciple as string,
+    userId: '',
+    status: 'Approved'
+  })
 
   const fetchMembers = async () => {
     if (!token) return
@@ -320,7 +331,7 @@ export function ManageMembers() {
   const handleApprove = async (memberId: string) => {
     try {
       setLoading(true)
-      console.log('Approving member:', memberId) // Debug log
+      console.log('Approving member:', memberId)
       
       const response = await fetch(getApiUrl('Auth/approval'), {
         method: 'POST',
@@ -330,18 +341,17 @@ export function ManageMembers() {
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          memberType: "Member",
-          userId: memberId, // Using the member's Id
-          status: "Approved" // Using exact enum value
+          memberType: approvalData.memberType,
+          userId: memberId,
+          status: "Approved"
         })
       })
 
       const data = await response.json()
-      console.log('Approval response:', data) // Debug response
+      console.log('Approval response:', data)
 
       if (response.ok && data.success) {
         toast.success('Member approved successfully')
-        // Refresh the members list
         fetchMembers()
       } else {
         toast.error(data.message || 'Failed to approve member')
@@ -555,7 +565,7 @@ export function ManageMembers() {
                     </button>
                     {member.status === 'Pending' && (
                       <button
-                        onClick={() => handleApprove(member.id)}
+                        onClick={() => setSelectedMember(member)}
                         className="text-yellow-600 hover:text-yellow-900"
                       >
                         Approve
@@ -818,6 +828,50 @@ export function ManageMembers() {
                 <p className="text-sm font-medium text-gray-700">Status</p>
                 <p className="text-sm text-gray-900">{selectedMember.status}</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Member Approval Modal */}
+      {selectedMember && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">Approve Member</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Member Type
+              </label>
+              <select
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                value={approvalData.memberType}
+                onChange={(e) => setApprovalData({ ...approvalData, memberType: e.target.value })}
+              >
+                {Object.values(MemberTypeEnum).map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                onClick={() => setSelectedMember(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                onClick={() => {
+                  handleApprove(selectedMember.id)
+                  setSelectedMember(null)
+                }}
+              >
+                Approve
+              </button>
             </div>
           </div>
         </div>
