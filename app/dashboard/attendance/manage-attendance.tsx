@@ -63,12 +63,19 @@ interface AttendanceDetails {
   isDeleted: boolean
 }
 
-interface FirstTimerForm {
+type MemberType = 'Disciple'
+type Gender = 'Male' | 'Female'
+
+interface FirstTimerFormUI {
   firstName: string
   lastName: string
   email: string
   phoneNumber: string
-  gender: 'Male' | 'Female'
+  gender: Gender
+}
+
+interface FirstTimerForm extends FirstTimerFormUI {
+  memberType: MemberType
 }
 
 interface AttendanceFilters {
@@ -103,14 +110,16 @@ export function ManageAttendance() {
     isFirstTimer: false,
     date: new Date().toISOString()
   }])
-  const [showFirstTimerForm, setShowFirstTimerForm] = useState(false)
-  const [firstTimerForm, setFirstTimerForm] = useState<FirstTimerForm>({
+  const [showFirstTimerForm, setShowFirstTimerForm] = useState(false);
+  const initialFirstTimerForm: FirstTimerForm = {
     firstName: '',
     lastName: '',
     email: '',
     phoneNumber: '',
-    gender: 'Male'
-  })
+    gender: 'Male',
+    memberType: 'Disciple'
+  };
+  const [firstTimerForm, setFirstTimerForm] = useState<FirstTimerForm>(initialFirstTimerForm);
   const [currentAttendanceIndex, setCurrentAttendanceIndex] = useState<number | null>(null)
   const [selectedReport, setSelectedReport] = useState<AttendanceReport | null>(null)
   const [viewingReport, setViewingReport] = useState<AttendanceDetails | null>(null)
@@ -228,51 +237,60 @@ export function ManageAttendance() {
     }
   }
 
+  const resetFirstTimerForm = () => {
+    setFirstTimerForm(initialFirstTimerForm);
+  };
+
+  const handleFirstTimerChange = (field: keyof FirstTimerFormUI, value: string) => {
+    setFirstTimerForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   const handleFirstTimerSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (currentAttendanceIndex === null || !userData) return
+    if (!userData) return
 
     try {
       setLoading(true)
-      // Create new member
-      const createMemberResponse = await fetch(getApiUrl('Member'), {
+
+      // Prepare the request body
+      const requestBody = {
+        firstName: firstTimerForm.firstName,
+        lastName: firstTimerForm.lastName,
+        email: firstTimerForm.email,
+        phoneNumber: firstTimerForm.phoneNumber,
+        gender: firstTimerForm.gender,
+        memberType: "Disciple",
+        disciplerId: userData.userId,
+        fellowshipId: userData.groupId
+      }
+
+      console.log('Sending request:', requestBody)
+
+      const response = await fetch(getApiUrl('Member'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...firstTimerForm,
-          memberType: 'Member',
-          disciplerId: userData.userId,
-          fellowshipId: userData.groupId
-        })
+        body: JSON.stringify(requestBody)
       })
 
-      const memberData = await createMemberResponse.json()
-      if (handleApiResponse(memberData) && createMemberResponse.ok) {
-        // Update the attendance with the new member ID
-        const newAttendances = [...attendances]
-        newAttendances[currentAttendanceIndex] = {
-          ...newAttendances[currentAttendanceIndex],
-          memberId: memberData.result.id,
-          fullName: `${firstTimerForm.firstName} ${firstTimerForm.lastName}`
-        }
-        setAttendances(newAttendances)
-        setShowFirstTimerForm(false)
-        setFirstTimerForm({
-          firstName: '',
-          lastName: '',
-          email: '',
-          phoneNumber: '',
-          gender: 'Male'
-        })
-        toast.success('First-timer registered successfully')
+      const data = await response.json()
+      console.log('Response:', data)
+
+      if (response.ok && data.success) {
+        toast.success('First timer saved successfully')
+        // Reset form
+        resetFirstTimerForm()
+      } else {
+        toast.error(data.message || 'Failed to save first timer')
       }
     } catch (error) {
-      console.error('Error creating first-timer:', error)
-      toast.error('Failed to register first-timer')
+      console.error('Error saving first timer:', error)
+      toast.error('Failed to save first timer')
     } finally {
       setLoading(false)
     }
@@ -609,9 +627,10 @@ export function ManageAttendance() {
                     </label>
                     <input
                       type="text"
+                      required
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={firstTimerForm.firstName}
-                      onChange={(e) => setFirstTimerForm({ ...firstTimerForm, firstName: e.target.value })}
+                      onChange={(e) => handleFirstTimerChange('firstName', e.target.value)}
                     />
                   </div>
                   <div className="mt-2">
@@ -620,9 +639,10 @@ export function ManageAttendance() {
                     </label>
                     <input
                       type="text"
+                      required
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={firstTimerForm.lastName}
-                      onChange={(e) => setFirstTimerForm({ ...firstTimerForm, lastName: e.target.value })}
+                      onChange={(e) => handleFirstTimerChange('lastName', e.target.value)}
                     />
                   </div>
                   <div className="mt-2">
@@ -631,9 +651,10 @@ export function ManageAttendance() {
                     </label>
                     <input
                       type="email"
+                      required
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={firstTimerForm.email}
-                      onChange={(e) => setFirstTimerForm({ ...firstTimerForm, email: e.target.value })}
+                      onChange={(e) => handleFirstTimerChange('email', e.target.value)}
                     />
                   </div>
                   <div className="mt-2">
@@ -641,10 +662,11 @@ export function ManageAttendance() {
                       Phone Number
                     </label>
                     <input
-                      type="text"
+                      type="tel"
+                      required
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={firstTimerForm.phoneNumber}
-                      onChange={(e) => setFirstTimerForm({ ...firstTimerForm, phoneNumber: e.target.value })}
+                      onChange={(e) => handleFirstTimerChange('phoneNumber', e.target.value)}
                     />
                   </div>
                   <div className="mt-2">
@@ -652,9 +674,10 @@ export function ManageAttendance() {
                       Gender
                     </label>
                     <select
+                      required
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={firstTimerForm.gender}
-                      onChange={(e) => setFirstTimerForm({ ...firstTimerForm, gender: e.target.value as 'Male' | 'Female' })}
+                      onChange={(e) => handleFirstTimerChange('gender', e.target.value)}
                     >
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
@@ -920,44 +943,49 @@ export function ManageAttendance() {
                 <label className="block text-sm font-medium text-gray-700">First Name</label>
                 <input
                   type="text"
+                  required
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={firstTimerForm.firstName}
-                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, firstName: e.target.value })}
+                  onChange={(e) => handleFirstTimerChange('firstName', e.target.value)}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Last Name</label>
                 <input
                   type="text"
+                  required
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={firstTimerForm.lastName}
-                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, lastName: e.target.value })}
+                  onChange={(e) => handleFirstTimerChange('lastName', e.target.value)}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Email</label>
                 <input
                   type="email"
+                  required
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={firstTimerForm.email}
-                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, email: e.target.value })}
+                  onChange={(e) => handleFirstTimerChange('email', e.target.value)}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Phone Number</label>
                 <input
-                  type="text"
+                  type="tel"
+                  required
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={firstTimerForm.phoneNumber}
-                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, phoneNumber: e.target.value })}
+                  onChange={(e) => handleFirstTimerChange('phoneNumber', e.target.value)}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Gender</label>
                 <select
+                  required
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={firstTimerForm.gender}
-                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, gender: e.target.value as 'Male' | 'Female' })}
+                  onChange={(e) => handleFirstTimerChange('gender', e.target.value)}
                 >
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
