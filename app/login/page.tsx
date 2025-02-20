@@ -11,10 +11,15 @@ import { getApiUrl } from '../utils/api-url'
 import { toast } from 'sonner'
 
 interface LoginResponse {
-  accessToken: string;
-  refreshToken: string | null;
-  expiredAt: string;
-  userData: any;
+  success: boolean
+  message: string
+  result: {
+    accessToken: string
+    refreshToken: string | null
+    expiredAt: string
+    userData: any
+  }
+  validationErrors: any
 }
 
 export default function Login() {
@@ -56,7 +61,7 @@ export default function Login() {
 
       const data = await response.json()
       if (handleApiResponse(data) && response.ok) {
-        await login(data.result.accessToken, data.result.userData)
+        await login(data)
         toast.success('Successfully logged in!')
       }
     } catch (error) {
