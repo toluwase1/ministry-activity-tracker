@@ -317,6 +317,43 @@ export function ManageMembers() {
     }
   }
 
+  const handleApprove = async (memberId: string) => {
+    try {
+      setLoading(true)
+      console.log('Approving member:', memberId) // Debug log
+      
+      const response = await fetch(getApiUrl('Auth/approval'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          memberType: "Member",
+          userId: memberId, // Using the member's Id
+          status: "Approved" // Using exact enum value
+        })
+      })
+
+      const data = await response.json()
+      console.log('Approval response:', data) // Debug response
+
+      if (response.ok && data.success) {
+        toast.success('Member approved successfully')
+        // Refresh the members list
+        fetchMembers()
+      } else {
+        toast.error(data.message || 'Failed to approve member')
+      }
+    } catch (error) {
+      console.error('Error approving member:', error)
+      toast.error('Failed to approve member')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleFilterChange = (field: keyof MemberFilters, value: string) => {
     setFilters((prev) => ({
       ...prev,
@@ -516,6 +553,14 @@ export function ManageMembers() {
                     >
                       Delete
                     </button>
+                    {member.status === 'Pending' && (
+                      <button
+                        onClick={() => handleApprove(member.id)}
+                        className="text-yellow-600 hover:text-yellow-900"
+                      >
+                        Approve
+                      </button>
+                    )}
                   </div>
                 </div>
               </li>
@@ -768,6 +813,10 @@ export function ManageMembers() {
               <div className="md:col-span-2">
                 <p className="text-sm font-medium text-gray-700">Fellowship Name</p>
                 <p className="text-sm text-gray-900">{selectedMember.fellowshipName}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-sm font-medium text-gray-700">Status</p>
+                <p className="text-sm text-gray-900">{selectedMember.status}</p>
               </div>
             </div>
           </div>

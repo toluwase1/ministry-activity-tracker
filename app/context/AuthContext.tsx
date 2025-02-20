@@ -1,28 +1,24 @@
 'use client'
 
-import React, { createContext, useState, useContext, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { API_BASE_URL } from '../config'
-import { handleApiResponse, type ApiResponse } from '../utils/api-response'
-import { getApiUrl } from '../utils/api-url'
 import { toast } from 'sonner'
 
 interface UserData {
-  userId: string
-  groupId: string
+  id: string
+  email: string
   fullName: string
-  phoneNumber: string
-  emailAddress: string
+  role: string
   userType: string
   groupName: string
   lastLoginDate: string | null
+  expiredAt: string
 }
 
 interface LoginResponse {
-  accessToken: string
-  refreshToken: string | null
-  expiredAt: string
-  userData: UserData
+  success: boolean
+  message: string
+  result: UserData
 }
 
 interface AuthContextType {
@@ -35,7 +31,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Initialize token from localStorage
 const getStoredToken = () => {
   if (typeof window !== 'undefined') {
     return localStorage.getItem('token')
@@ -43,43 +38,99 @@ const getStoredToken = () => {
   return null
 }
 
-// Initialize user data from localStorage
 const getStoredUserData = () => {
   if (typeof window !== 'undefined') {
-    const data = localStorage.getItem('userData')
-    return data ? JSON.parse(data) : null
+    const userData = localStorage.getItem('userData')
+    return userData ? JSON.parse(userData) : null
   }
   return null
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(getStoredToken())
-  const [userData, setUserData] = useState<UserData | null>(getStoredUserData())
+  const [token, setToken] = useState<string | null>(null)
+  const [userData, setUserData] = useState<UserData | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const router = useRouter()
 
-  // Initialize auth state
+  // Helper function to check if a token is expired
+  const isTokenExpired = (expiredAtStr: string) => {
+    // Parse the UTC expiration time
+    const expiredAt = new Date(expiredAtStr)
+    const now = new Date()
+    
+    // Convert both to UTC timestamps for comparison
+    return now.getTime() > expiredAt.getTime()
+  }
+
   useEffect(() => {
     const storedToken = getStoredToken()
     const storedUserData = getStoredUserData()
-    if (storedToken) {
-      setToken(storedToken)
-    }
-    if (storedUserData) {
-      setUserData(storedUserData)
+    
+    if (storedToken && storedUserData?.expiredAt) {
+      if (isTokenExpired(storedUserData.expiredAt)) {
+        // Token is expired, clear storage and redirect to login
+        console.log('Token expired, logging out')
+        localStorage.removeItem('token')
+        localStorage.removeItem('userData')
+        router.push('/login')
+      } else {
+        // Token is still valid
+        setToken(storedToken)
+        setUserData(storedUserData)
+        
+        // Set up expiration timer
+        const expiredAt = new Date(storedUserData.expiredAt).getTime()
+        const now = new Date().getTime()
+        const timeUntilExpiry = expiredAt - now
+        
+        if (timeUntilExpiry > 0) {
+          setTimeout(() => {
+            console.log('Token expired via timer')
+            logout()
+            router.push('/login')
+          }, timeUntilExpiry)
+        }
+      }
     }
     setIsInitialized(true)
-  }, [])
+  }, [router])
+
+  // Check token expiration before any authenticated action
+  const checkTokenExpiration = () => {
+    if (userData?.expiredAt) {
+      if (isTokenExpired(userData.expiredAt)) {
+        console.log('Token expired during check')
+        logout()
+        router.push('/login')
+        return false
+      }
+    }
+    return true
+  }
 
   const login = async (newToken: string, newUserData: UserData) => {
     try {
-      if (!newToken) {
-        throw new Error('No token provided')
-      }
       localStorage.setItem('token', newToken)
       localStorage.setItem('userData', JSON.stringify(newUserData))
+      
       setToken(newToken)
       setUserData(newUserData)
+      
+      // Set up expiration timer only if token isn't already expired
+      if (!isTokenExpired(newUserData.expiredAt)) {
+        const expiredAt = new Date(newUserData.expiredAt).getTime()
+        const now = new Date().getTime()
+        const timeUntilExpiry = expiredAt - now
+        
+        if (timeUntilExpiry > 0) {
+          setTimeout(() => {
+            console.log('Token expired via login timer')
+            logout()
+            router.push('/login')
+          }, timeUntilExpiry)
+        }
+      }
+      
       router.replace('/dashboard')
     } catch (error) {
       console.error('Login error:', error)
@@ -102,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      isAuthenticated: !!token,
+      isAuthenticated: !!token && checkTokenExpiration(),
       login,
       logout,
       token,
