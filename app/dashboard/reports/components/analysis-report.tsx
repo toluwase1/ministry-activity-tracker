@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import DatePicker from 'react-datepicker'
 import { getApiUrl } from '../../../utils/api-url'
 import { toast } from 'sonner'
-import { handleApiResponse } from '../../../utils/api-response'
+import "react-datepicker/dist/react-datepicker.css"
 
 interface Activity {
   id: string
@@ -23,71 +23,67 @@ interface AnalysisReport {
   membersWithDisciples: number
 }
 
-interface AnalysisResponse {
-  result: AnalysisReport[]
-  success: boolean
-  message: string
-  validationErrors: null | string[]
-}
-
 export function AnalysisReport() {
   const { token, userData } = useAuth()
   const [loading, setLoading] = useState(false)
   const [startDate, setStartDate] = useState<Date | null>(() => {
-    const lastWeek = new Date()
-    lastWeek.setDate(lastWeek.getDate() - 7)
-    return lastWeek
+    const lastMonth = new Date()
+    lastMonth.setMonth(lastMonth.getMonth() - 1)
+    return lastMonth
   })
   const [endDate, setEndDate] = useState<Date | null>(new Date())
   const [selectedActivities, setSelectedActivities] = useState<string[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [analysisData, setAnalysisData] = useState<AnalysisReport[]>([])
-  const [selectedPeriod, setSelectedPeriod] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly'>('Daily')
 
-  const fetchActivities = async () => {
-    try {
-      const response = await fetch(getApiUrl('Activity'), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
+  useEffect(() => {
+    const fetchActivities = async () => {
+      try {
+        const response = await fetch(getApiUrl('Activity'), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        })
+
+        const data = await response.json()
+        if (response.ok && data.success) {
+          setActivities(data.result.items || [])
+          // After fetching activities, automatically fetch last month's report
+          handleAnalysisReport()
         }
-      })
-
-      const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        setActivities(data.result.items)
+      } catch (error) {
+        console.error('Error fetching activities:', error)
+        toast.error('Failed to load activities')
       }
-    } catch (error) {
-      console.error('Error fetching activities:', error)
-      toast.error('Failed to load activities')
     }
-  }
+
+    if (token) {
+      fetchActivities()
+    }
+  }, [token])
 
   const handleAnalysisReport = async () => {
     try {
       setLoading(true)
       
-      const formattedStartDate = startDate ? startDate.toISOString().split('T')[0] : ''
-      const formattedEndDate = endDate ? endDate.toISOString().split('T')[0] : ''
-      
       const queryParams = new URLSearchParams()
       
-      if (formattedStartDate) {
-        queryParams.append('StartDate', formattedStartDate)
+      if (startDate) {
+        queryParams.append('StartDate', startDate.toISOString().split('T')[0])
       }
-      if (formattedEndDate) {
-        queryParams.append('EndDate', formattedEndDate)
+      if (endDate) {
+        queryParams.append('EndDate', endDate.toISOString().split('T')[0])
       }
       if (selectedActivities.length > 0) {
         queryParams.append('ActivityIds', selectedActivities.join(','))
       }
-      if (userData?.groupId) {
-        queryParams.append('FellowshipId', userData.groupId)
-      }
-      
-      queryParams.append('Period', selectedPeriod)
+  
 
-      const response = await fetch(getApiUrl(`StandardReport/analysis-report?${queryParams}`), {
+      const url = `${getApiUrl('StandardReport/analysis-report')}?${queryParams.toString()}`
+      console.log('Fetching URL:', url) // Debugging line
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -95,7 +91,8 @@ export function AnalysisReport() {
         }
       })
 
-      const data: AnalysisResponse = await response.json()
+      const data = await response.json()
+      console.log('Response Data:', data) // Debugging line
       
       if (response.ok && data.success) {
         setAnalysisData(data.result)
@@ -111,27 +108,56 @@ export function AnalysisReport() {
     }
   }
 
+  const handleExportToExcel = async () => {
+    try {
+      setLoading(true)
+      const queryParams = new URLSearchParams()
+      
+      if (startDate) {
+        queryParams.append('StartDate', startDate.toISOString().split('T')[0])
+      }
+      if (endDate) {
+        queryParams.append('EndDate', endDate.toISOString().split('T')[0])
+      }
+      if (selectedActivities.length > 0) {
+        queryParams.append('ActivityIds', selectedActivities.join(','))
+      }
+
+      const response = await fetch(getApiUrl(`StandardReport/analysis-report/export?${queryParams}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to export report')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'analysis-report.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast.success('Report exported successfully')
+    } catch (error) {
+      console.error('Error exporting report:', error)
+      toast.error('Failed to export report')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h2 className="text-xl font-semibold mb-4">Generate Analysis Report</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Period
-            </label>
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value as typeof selectedPeriod)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            >
-              <option value="Daily">Daily</option>
-              <option value="Weekly">Weekly</option>
-              <option value="Monthly">Monthly</option>
-              <option value="Quarterly">Quarterly</option>
-              <option value="Yearly">Yearly</option>
-            </select>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Start Date
@@ -139,8 +165,8 @@ export function AnalysisReport() {
             <DatePicker
               selected={startDate}
               onChange={setStartDate}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              placeholderText="Select start date"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+              dateFormat="yyyy-MM-dd"
             />
           </div>
           <div>
@@ -150,8 +176,8 @@ export function AnalysisReport() {
             <DatePicker
               selected={endDate}
               onChange={setEndDate}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              placeholderText="Select end date"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+              dateFormat="yyyy-MM-dd"
             />
           </div>
           <div>
@@ -165,7 +191,7 @@ export function AnalysisReport() {
                 const values = Array.from(e.target.selectedOptions, option => option.value)
                 setSelectedActivities(values)
               }}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
             >
               {activities.map((activity) => (
                 <option key={activity.id} value={activity.id}>
@@ -176,13 +202,20 @@ export function AnalysisReport() {
           </div>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end space-x-3">
           <button
             onClick={handleAnalysisReport}
             disabled={loading}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
             {loading ? 'Generating...' : 'Generate Analysis'}
+          </button>
+          <button
+            onClick={handleExportToExcel}
+            disabled={loading}
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+          >
+            {loading ? 'Exporting...' : 'Export to Excel'}
           </button>
         </div>
       </div>
@@ -197,59 +230,27 @@ export function AnalysisReport() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Activity
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Frequency
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Attendees
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      100% Attendance
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      75% Attendance
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      50% Attendance
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Below 50%
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Members with Disciples
-                    </th>
+                    <th className="px-6 py-3 text-left">Activity</th>
+                    <th className="px-6 py-3 text-left">Frequency</th>
+                    <th className="px-6 py-3 text-left">Total Attendees</th>
+                    <th className="px-6 py-3 text-center">100%</th>
+                    <th className="px-6 py-3 text-center">75%</th>
+                    <th className="px-6 py-3 text-center">50%</th>
+                    <th className="px-6 py-3 text-center">Below 50%</th>
+                    <th className="px-6 py-3 text-center">Members With Disciples</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {analysisData.map((item, index) => (
                     <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {item.activity}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.frequency}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.totalAttendees}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.count100}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.count75}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.count50}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.countBelow50}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {item.membersWithDisciples}
-                      </td>
+                      <td className="px-6 py-4">{item.activity}</td>
+                      <td className="px-6 py-4">{item.frequency}</td>
+                      <td className="px-6 py-4">{item.totalAttendees}</td>
+                      <td className="px-6 py-4 text-center">{item.count100}</td>
+                      <td className="px-6 py-4 text-center">{item.count75}</td>
+                      <td className="px-6 py-4 text-center">{item.count50}</td>
+                      <td className="px-6 py-4 text-center">{item.countBelow50}</td>
+                      <td className="px-6 py-4 text-center">{item.membersWithDisciples}</td>
                     </tr>
                   ))}
                 </tbody>
