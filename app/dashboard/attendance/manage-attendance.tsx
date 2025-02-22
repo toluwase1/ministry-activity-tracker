@@ -91,7 +91,8 @@ export function ManageAttendance() {
   const [loading, setLoading] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
-  const [selectedActivity, setSelectedActivity] = useState<string>('')
+  const [selectedActivity, setSelectedActivity] = useState('')
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]) // Initialize with current date
   const [attendances, setAttendances] = useState<AttendanceItem[]>([])
   const [showFirstTimerForm, setShowFirstTimerForm] = useState(false)
   const [firstTimerForm, setFirstTimerForm] = useState({
@@ -373,6 +374,12 @@ export function ManageAttendance() {
         return
       }
 
+      // Validate date selection
+      if (!selectedDate) {
+        toast.error('Please select a date')
+        return
+      }
+
       // Check for absent members without notes
       const absentMembersWithoutNotes = attendances
         .filter(att => att.memberId && !att.isPresent && (!att.notes || att.notes.trim() === ''))
@@ -383,6 +390,11 @@ export function ManageAttendance() {
         return
       }
 
+      // Format the date to ISO string with the selected date
+      const selectedDateTime = new Date(selectedDate)
+      selectedDateTime.setHours(12) // Set to noon to avoid timezone issues
+      const formattedDate = selectedDateTime.toISOString()
+
       // Prepare attendance records for all members
       const attendanceRecords = attendances
         .filter(att => att.memberId) // Include all members
@@ -392,7 +404,7 @@ export function ManageAttendance() {
           isPresent: att.isPresent,
           isFirstTimer: att.isFirstTimer || false,
           notes: att.notes || "", // Include notes for absent members
-          date: new Date().toISOString()
+          date: formattedDate
         }))
 
       if (attendanceRecords.length === 0) {
@@ -424,6 +436,7 @@ export function ManageAttendance() {
         
         // Reset form
         setSelectedActivity('')
+        setSelectedDate(new Date().toISOString().split('T')[0]) // Reset date
         await fetchMembers() // This will reset attendances with all members marked as not present
       } else {
         // Handle validation errors
@@ -660,21 +673,41 @@ export function ManageAttendance() {
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Create Attendance</h2>
         
         {/* Step 1: Activity Selection */}
-        <div className="mb-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Select Activity</h3>
-          <select
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            value={selectedActivity}
-            onChange={(e) => setSelectedActivity(e.target.value)}
-            required
-          >
-            <option value="">Select an activity</option>
-            {activities.map((activity) => (
-              <option key={activity.id} value={activity.id}>
-                {activity.name}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-6 mt-4">
+          <div>
+            <label htmlFor="activity" className="block text-sm font-medium text-gray-700">
+              Select Activity
+            </label>
+            <select
+              id="activity"
+              name="activity"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              value={selectedActivity}
+              onChange={(e) => setSelectedActivity(e.target.value)}
+            >
+              <option value="">Select an activity</option>
+              {activities.map((activity) => (
+                <option key={activity.id} value={activity.id}>
+                  {activity.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="date" className="block text-sm font-medium text-gray-700">
+              Attendance Date
+            </label>
+            <input
+              type="date"
+              id="date"
+              name="date"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              max={new Date().toISOString().split('T')[0]} // Prevent future dates
+            />
+          </div>
         </div>
 
         {/* Step 2: Member Attendance */}
