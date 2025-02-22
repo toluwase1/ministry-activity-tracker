@@ -75,6 +75,7 @@ interface FirstTimerForm extends FirstTimerFormUI {
 
 interface AttendanceFilters {
   memberId?: string
+  disciplerId?: string
   search?: string
   startDate?: string
   endDate?: string
@@ -196,7 +197,8 @@ export function ManageAttendance() {
         ...(filters.search && { search: filters.search }),
         ...(filters.startDate && { startDate: filters.startDate }),
         ...(filters.endDate && { endDate: filters.endDate }),
-        ...(filters.memberId && { memberId: filters.memberId })
+        ...(filters.memberId && { memberId: filters.memberId }),
+        ...(userData?.userId && { disciplerId: userData.userId })
       })
 
       const response = await fetch(getApiUrl(`AttendanceReport?${queryParams}`), {
@@ -364,11 +366,13 @@ export function ManageAttendance() {
 
       // Prepare attendance records
       const attendanceRecords = attendances
-        .filter(att => att.memberId) // Only include records with member IDs
+        .filter(att => att.memberId && att.isPresent) // Only include present members
         .map(att => ({
           memberId: att.memberId,
           activityId: selectedActivity,
           isPresent: att.isPresent,
+          isFirstTimer: att.isFirstTimer || false,
+          notes: "",
           date: new Date().toISOString()
         }))
 
@@ -377,19 +381,24 @@ export function ManageAttendance() {
         return
       }
 
-      const response = await fetch(getApiUrl('Attendance'), {
+      const payload = {
+        attendances: attendanceRecords
+      }
+      console.log('Submitting attendance with payload:', payload)
+
+      const response = await fetch(getApiUrl('AttendanceReport'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({
-          attendances: attendanceRecords
-        })
+        body: JSON.stringify(payload)
       })
 
+      console.log('Response status:', response.status)
       const data = await response.json()
+      console.log('Response data:', data)
       
       if (response.ok && data.success) {
         toast.success(data.message || 'Attendance submitted successfully')
