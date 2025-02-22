@@ -19,6 +19,7 @@ interface AttendanceItem {
   fullName: string
   isPresent: boolean
   isFirstTimer?: boolean
+  notes?: string
 }
 
 interface Activity {
@@ -241,9 +242,17 @@ export function ManageAttendance() {
 
   const handleAttendanceChange = (index: number, field: keyof AttendanceItem, value: any) => {
     const newAttendances = [...attendances]
-    newAttendances[index] = {
-      ...newAttendances[index],
-      [field]: value
+    if (field === 'isPresent') {
+      newAttendances[index] = {
+        ...newAttendances[index],
+        [field]: value,
+        notes: value ? "" : newAttendances[index].notes // Clear notes if marked as present
+      }
+    } else {
+      newAttendances[index] = {
+        ...newAttendances[index],
+        [field]: value
+      }
     }
     setAttendances(newAttendances)
 
@@ -364,15 +373,25 @@ export function ManageAttendance() {
         return
       }
 
-      // Prepare attendance records
+      // Check for absent members without notes
+      const absentMembersWithoutNotes = attendances
+        .filter(att => att.memberId && !att.isPresent && (!att.notes || att.notes.trim() === ''))
+        .map(att => att.fullName)
+
+      if (absentMembersWithoutNotes.length > 0) {
+        toast.error(`Please provide reason for absence for: ${absentMembersWithoutNotes.join(', ')}`)
+        return
+      }
+
+      // Prepare attendance records for all members
       const attendanceRecords = attendances
-        .filter(att => att.memberId && att.isPresent) // Only include present members
+        .filter(att => att.memberId) // Include all members
         .map(att => ({
           memberId: att.memberId,
           activityId: selectedActivity,
           isPresent: att.isPresent,
           isFirstTimer: att.isFirstTimer || false,
-          notes: "",
+          notes: att.notes || "", // Include notes for absent members
           date: new Date().toISOString()
         }))
 
@@ -407,7 +426,16 @@ export function ManageAttendance() {
         setSelectedActivity('')
         await fetchMembers() // This will reset attendances with all members marked as not present
       } else {
-        toast.error(data.message || 'Failed to submit attendance')
+        // Handle validation errors
+        if (data.validationErrors && data.validationErrors.length > 0) {
+          // Display each validation error as a separate toast
+          data.validationErrors.forEach((error: string) => {
+            toast.error(error)
+          })
+        } else {
+          // Display general error message
+          toast.error(data.message || 'Failed to submit attendance')
+        }
       }
     } catch (error) {
       console.error('Error submitting attendance:', error)
@@ -679,6 +707,15 @@ export function ManageAttendance() {
                       />
                       <span className="ml-2">Present</span>
                     </label>
+                    {!attendance.isPresent && (
+                      <input
+                        type="text"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        placeholder="Reason for absence"
+                        value={attendance.notes || ''}
+                        onChange={(e) => handleAttendanceChange(index, 'notes', e.target.value)}
+                      />
+                    )}
                   </div>
                 </div>
               ))}
