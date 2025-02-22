@@ -131,7 +131,7 @@ export function ManageAttendance() {
         setMembers(assignedMembers)
         
         // Initialize attendance records for all members
-        const initialAttendances = assignedMembers.map(member => ({
+        const initialAttendances = assignedMembers.map((member: Member) => ({
           memberId: member.id,
           fullName: `${member.firstName} ${member.lastName}`,
           isPresent: false
