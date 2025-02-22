@@ -1,9 +1,6 @@
-'use client'
-
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { getApiUrl } from '../../utils/api-url'
-import { handleApiResponse, type ApiResponse } from '../../utils/api-response'
 import { toast } from 'sonner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { XMarkIcon } from '@heroicons/react/24/outline'
@@ -12,31 +9,29 @@ interface Member {
   id: string
   firstName: string
   lastName: string
+  phoneNumber: string
   email: string
-  status: string
+  disciplerId: string
+}
+
+interface AttendanceItem {
+  memberId: string
+  fullName: string
+  isPresent: boolean
+  isFirstTimer?: boolean
 }
 
 interface Activity {
   id: string
   name: string
-  description: string
-  type: string
-}
-
-interface AttendanceItem {
-  memberId: string
-  activityId: string
-  isPresent: boolean
-  notes: string
-  isFirstTimer: boolean
-  date: string
-  fullName?: string
+  description?: string
+  status: string
 }
 
 interface AttendanceReport {
   id: string
   memberId: string
-  memberName: string
+  memberFullName: string
   activityId: string
   activityName: string
   isPresent: boolean
@@ -92,41 +87,38 @@ interface AttendanceFilters {
 export function ManageAttendance() {
   const { token, userData } = useAuth()
   const [loading, setLoading] = useState(false)
-  const [attendanceReports, setAttendanceReports] = useState<AttendanceReport[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
-  const [totalCount, setTotalCount] = useState(0)
-  const [filters, setFilters] = useState<AttendanceFilters>({
-    page: 1,
-    pageSize: 10,
-    sortColumn: 'date',
-    sortOrder: 'desc'
-  })
-  const [attendances, setAttendances] = useState<AttendanceItem[]>([{
-    memberId: '',
-    activityId: '',
-    isPresent: true,
-    notes: '',
-    isFirstTimer: false,
-    date: new Date().toISOString()
-  }])
-  const [showFirstTimerForm, setShowFirstTimerForm] = useState(false);
-  const initialFirstTimerForm: FirstTimerForm = {
+  const [selectedActivity, setSelectedActivity] = useState<string>('')
+  const [attendances, setAttendances] = useState<AttendanceItem[]>([])
+  const [showFirstTimerForm, setShowFirstTimerForm] = useState(false)
+  const [firstTimerForm, setFirstTimerForm] = useState({
     firstName: '',
     lastName: '',
     email: '',
     phoneNumber: '',
-    gender: 'Male',
-    memberType: 'Disciple'
-  };
-  const [firstTimerForm, setFirstTimerForm] = useState<FirstTimerForm>(initialFirstTimerForm);
-  const [currentAttendanceIndex, setCurrentAttendanceIndex] = useState<number | null>(null)
-  const [selectedReport, setSelectedReport] = useState<AttendanceReport | null>(null)
-  const [viewingReport, setViewingReport] = useState<AttendanceDetails | null>(null)
+    gender: 'Male' as Gender,
+  })
+  const [attendanceReports, setAttendanceReports] = useState<AttendanceReport[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [filters, setFilters] = useState<AttendanceFilters>({
+    page: 1,
+    pageSize: 10,
+  })
+  const [viewingReport, setViewingReport] = useState<AttendanceReport | null>(null)
+  const [editingReport, setEditingReport] = useState<AttendanceReport | null>(null)
 
+  // Fetch members assigned to the logged-in worker
   const fetchMembers = async () => {
+    if (!token || !userData) return
+
     try {
-      const response = await fetch(getApiUrl('Member'), {
+      setLoading(true)
+      const queryParams = new URLSearchParams({
+        disciplerId: userData.userId
+      })
+
+      const response = await fetch(getApiUrl(`Member?${queryParams}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -134,16 +126,32 @@ export function ManageAttendance() {
       })
 
       const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        setMembers(Array.isArray(data.result.items) ? data.result.items : [])
+      if (response.ok && data.success) {
+        const assignedMembers = data.result.items || []
+        setMembers(assignedMembers)
+        
+        // Initialize attendance records for all members
+        const initialAttendances = assignedMembers.map(member => ({
+          memberId: member.id,
+          fullName: `${member.firstName} ${member.lastName}`,
+          isPresent: false
+        }))
+        setAttendances(initialAttendances)
+      } else {
+        toast.error(data.message || 'Failed to load members')
       }
     } catch (error) {
       console.error('Error fetching members:', error)
       toast.error('Failed to load members')
+    } finally {
+      setLoading(false)
     }
   }
 
+  // Fetch available activities
   const fetchActivities = async () => {
+    if (!token) return
+
     try {
       const response = await fetch(getApiUrl('Activity'), {
         headers: {
@@ -153,11 +161,10 @@ export function ManageAttendance() {
       })
 
       const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        const attendanceActivities = data.result.items.filter(
-          (activity: Activity) => activity.type === 'Attendance'
-        )
-        setActivities(attendanceActivities)
+      if (response.ok && data.success) {
+        setActivities(data.result.items || [])
+      } else {
+        toast.error(data.message || 'Failed to load activities')
       }
     } catch (error) {
       console.error('Error fetching activities:', error)
@@ -183,8 +190,16 @@ export function ManageAttendance() {
   const fetchAttendanceReports = async () => {
     try {
       setLoading(true)
-      const queryString = buildQueryString(filters)
-      const response = await fetch(`${getApiUrl('AttendanceReport')}?${queryString}`, {
+      const queryParams = new URLSearchParams({
+        page: filters.page.toString(),
+        pageSize: filters.pageSize.toString(),
+        ...(filters.search && { search: filters.search }),
+        ...(filters.startDate && { startDate: filters.startDate }),
+        ...(filters.endDate && { endDate: filters.endDate }),
+        ...(filters.memberId && { memberId: filters.memberId })
+      })
+
+      const response = await fetch(getApiUrl(`AttendanceReport?${queryParams}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -192,13 +207,16 @@ export function ManageAttendance() {
       })
 
       const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
+      console.log('Attendance Reports:', data) // Add this log
+      if (response.ok && data.success) {
         setAttendanceReports(data.result.items)
         setTotalCount(data.result.totalCount)
+      } else {
+        toast.error(data.message || 'Failed to fetch attendance reports')
       }
     } catch (error) {
-      console.error('Error fetching attendance reports:', error)
-      toast.error('Failed to load attendance reports')
+      console.error('Error fetching reports:', error)
+      toast.error('Failed to fetch attendance reports')
     } finally {
       setLoading(false)
     }
@@ -209,11 +227,8 @@ export function ManageAttendance() {
       ...attendances,
       {
         memberId: '',
-        activityId: '',
-        isPresent: true,
-        notes: '',
-        isFirstTimer: false,
-        date: new Date().toISOString()
+        fullName: '',
+        isPresent: false
       }
     ])
   }
@@ -232,14 +247,9 @@ export function ManageAttendance() {
 
     // Show first timer form when isFirstTimer is checked
     if (field === 'isFirstTimer' && value === true) {
-      setCurrentAttendanceIndex(index)
       setShowFirstTimerForm(true)
     }
   }
-
-  const resetFirstTimerForm = () => {
-    setFirstTimerForm(initialFirstTimerForm);
-  };
 
   const handleFirstTimerChange = (field: keyof FirstTimerFormUI, value: string) => {
     setFirstTimerForm(prev => ({
@@ -253,54 +263,121 @@ export function ManageAttendance() {
     if (!userData) return
 
     try {
-      setLoading(true)
+        setLoading(true)
 
-      // Prepare the request body
-      const requestBody = {
-        firstName: firstTimerForm.firstName,
-        lastName: firstTimerForm.lastName,
-        email: firstTimerForm.email,
-        phoneNumber: firstTimerForm.phoneNumber,
-        gender: firstTimerForm.gender,
-        memberType: "Disciple",
-        disciplerId: userData.userId,
-        fellowshipId: userData.groupId
-      }
+        const requestBody = {
+            firstName: firstTimerForm.firstName,
+            lastName: firstTimerForm.lastName,
+            email: firstTimerForm.email,
+            phoneNumber: firstTimerForm.phoneNumber,
+            gender: firstTimerForm.gender,
+            memberType: "Disciple",
+            disciplerId: userData.userId,
+            fellowshipId: userData.groupId
+        }
 
-      console.log('Sending request:', requestBody)
+        console.log('Creating new member:', requestBody)
 
-      const response = await fetch(getApiUrl('Member'), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      })
+        const response = await fetch(getApiUrl('Member'), {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        })
 
-      const data = await response.json()
-      console.log('Response:', data)
+        const data = await response.json()
+        console.log('Member creation response:', data)
 
-      if (response.ok && data.success) {
-        toast.success('First timer saved successfully')
-        // Reset form
-        resetFirstTimerForm()
-      } else {
-        toast.error(data.message || 'Failed to save first timer')
-      }
+        // Always show API message (whether success or failure)
+        toast[data.success ? 'success' : 'error'](data.message || 'Operation completed')
+
+        // Stop execution if request failed or validation errors exist
+        if (!data.success || (data.validationErrors && data.validationErrors.length > 0)) {
+            const errorMessage = data.validationErrors?.length > 0 
+                ? data.validationErrors.join(', ') 
+                : data.message || 'Failed to save first timer'
+            
+            console.error('Validation errors:', errorMessage)
+            toast.error(errorMessage)
+            return
+        }
+
+        // Ensure result exists before accessing .id
+        if (data.success && data.result) {
+            const newMemberId = data.result.id || null
+            const fullName = `${firstTimerForm.firstName} ${firstTimerForm.lastName}`
+
+            if (!newMemberId) {
+                console.error("Error: API did not return member ID.")
+                toast.error("Error: Could not retrieve member ID from server.")
+                return
+            }
+
+            // Refresh the members list immediately
+            await fetchMembers()
+
+            // Then update the attendance entry with the new member's ID and full name
+            const newAttendances = [...attendances]
+            newAttendances[0] = {
+                ...newAttendances[0],
+                memberId: newMemberId,
+                fullName: fullName
+            }
+            setAttendances(newAttendances)
+
+            // Reset form and close modal
+            setShowFirstTimerForm(false)
+            setFirstTimerForm({
+                firstName: '',
+                lastName: '',
+                email: '',
+                phoneNumber: '',
+                gender: 'Male' as Gender,
+            })
+        } else {
+            console.error("Error: No result returned from API.")
+            toast.error("Error: Unexpected response. No user data found.")
+        }
+
     } catch (error) {
-      console.error('Error saving first timer:', error)
-      toast.error('Failed to save first timer')
+        console.error('Error creating first timer:', error)
+        toast.error('Network error: Failed to save first timer')
     } finally {
-      setLoading(false)
+        setLoading(false)
     }
-  }
+}
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
     try {
       setLoading(true)
-      const response = await fetch(getApiUrl('AttendanceReport'), {
+      
+      // Validate activity selection
+      if (!selectedActivity) {
+        toast.error('Please select an activity')
+        return
+      }
+
+      // Prepare attendance records
+      const attendanceRecords = attendances
+        .filter(att => att.memberId) // Only include records with member IDs
+        .map(att => ({
+          memberId: att.memberId,
+          activityId: selectedActivity,
+          isPresent: att.isPresent,
+          date: new Date().toISOString()
+        }))
+
+      if (attendanceRecords.length === 0) {
+        toast.error('No attendance records to submit')
+        return
+      }
+
+      const response = await fetch(getApiUrl('Attendance'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -308,26 +385,24 @@ export function ManageAttendance() {
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          attendances
+          attendances: attendanceRecords
         })
       })
 
       const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
-        toast.success('Attendance reports created successfully')
-        setAttendances([{
-          memberId: '',
-          activityId: '',
-          isPresent: true,
-          notes: '',
-          isFirstTimer: false,
-          date: new Date().toISOString()
-        }])
-        await fetchAttendanceReports()
+      
+      if (response.ok && data.success) {
+        toast.success(data.message || 'Attendance submitted successfully')
+        
+        // Reset form
+        setSelectedActivity('')
+        await fetchMembers() // This will reset attendances with all members marked as not present
+      } else {
+        toast.error(data.message || 'Failed to submit attendance')
       }
     } catch (error) {
-      console.error('Error creating attendance reports:', error)
-      toast.error('Failed to create attendance reports')
+      console.error('Error submitting attendance:', error)
+      toast.error('Failed to submit attendance')
     } finally {
       setLoading(false)
     }
@@ -344,16 +419,9 @@ export function ManageAttendance() {
       })
 
       const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
+      if (response.ok) {
         const report = data.result
-        setSelectedReport(report)
-        // setEditingReport({
-        //   reportId: id,
-        //   memberId: report.memberId,
-        //   activityId: report.activityId,
-        //   isPresent: report.isPresent,
-        //   date: report.date
-        // })
+        setViewingReport(report)
       }
     } catch (error) {
       console.error('Error fetching attendance report:', error)
@@ -374,7 +442,7 @@ export function ManageAttendance() {
       })
 
       const data = await response.json()
-      if (handleApiResponse(data) && response.ok) {
+      if (response.ok) {
         setViewingReport(data.result)
       }
     } catch (error) {
@@ -385,73 +453,160 @@ export function ManageAttendance() {
     }
   }
 
-  const updateAttendanceReport = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // if (!editingReport) return
+  const handleFilterChange = (key: keyof AttendanceFilters, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value, page: 1 }))
+  }
 
+  const handleViewReport = async (id: string) => {
     try {
       setLoading(true)
-      // const response = await fetch(getApiUrl('AttendanceReport/edit'), {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`,
-      //     'Content-Type': 'application/json',
-      //     'Accept': 'application/json'
-      //   },
-      //   body: JSON.stringify(editingReport)
-      // })
+      const response = await fetch(getApiUrl(`AttendanceReport/${id}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      })
 
-      // const data = await response.json()
-      // if (handleApiResponse(data) && response.ok) {
-      //   toast.success('Attendance report updated successfully')
-      //   setEditingReport(null)
-      //   setSelectedReport(null)
-      //   await fetchAttendanceReports()
-      // }
+      const data = await response.json()
+      if (response.ok && data.success) {
+        setViewingReport(data.result)
+      } else {
+        toast.error(data.message || 'Failed to load attendance report')
+      }
     } catch (error) {
-      console.error('Error updating attendance report:', error)
-      toast.error('Failed to update attendance report')
+      console.error('Error viewing report:', error)
+      toast.error('Failed to load attendance report')
     } finally {
       setLoading(false)
     }
   }
 
-  const deleteAttendanceReport = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this attendance report?')) return
+  const handleEditReport = async (id: string) => {
+    try {
+      setLoading(true)
+      console.log('Editing report with ID:', id)
+      const report = attendanceReports.find(r => r.id === id)
+      if (report) {
+        setEditingReport(report)
+      } else {
+        toast.error('Report not found')
+      }
+    } catch (error) {
+      console.error('Error loading report for edit:', error)
+      toast.error('Failed to load attendance report')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteReport = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this attendance report?')) {
+      return
+    }
 
     try {
       setLoading(true)
-      // const response = await fetch(getApiUrl('AttendanceReport/delete'), {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${token}`,
-      //     'Content-Type': 'application/json',
-      //     'Accept': 'application/json'
-      //   },
-      //   body: JSON.stringify({ reportId: id })
-      // })
+      console.log('Deleting report with ID:', id)
 
-      // const data = await response.json()
-      // if (handleApiResponse(data) && response.ok) {
-      //   toast.success('Attendance report deleted successfully')
-      //   setSelectedReport(null)
-      //   await fetchAttendanceReports()
-      // }
+      const response = await fetch(getApiUrl('AttendanceReport/delete'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ reportId: id })
+      })
+
+      const data = await response.json()
+      console.log('Delete Response:', {
+        status: response.status,
+        ok: response.ok,
+        data
+      })
+
+      if (response.ok && data.success) {
+        toast.success(data.message || 'Attendance report deleted successfully')
+        await fetchAttendanceReports() // Refresh the list
+      } else {
+        toast.error(data.message || 'Failed to delete attendance report')
+      }
     } catch (error) {
-      console.error('Error deleting attendance report:', error)
+      console.error('Error deleting report:', error)
       toast.error('Failed to delete attendance report')
     } finally {
       setLoading(false)
     }
   }
 
+  const handleUpdateReport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingReport) return
+
+    try {
+      setLoading(true)
+      console.log('Editing Report Object:', editingReport) // Log the full report object
+      
+      const payload = {
+        reportId: editingReport.id,
+        memberId: editingReport.memberId,
+        activityId: editingReport.activityId,
+        isPresent: editingReport.isPresent,
+        date: editingReport.date
+      }
+
+      console.log('Edit Request Payload:', {
+        url: getApiUrl('AttendanceReport/edit'),
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        payload
+      })
+
+      const response = await fetch(getApiUrl('AttendanceReport/edit'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await response.json()
+      console.log('Edit Response:', {
+        status: response.status,
+        ok: response.ok,
+        data
+      })
+
+      if (response.ok && data.success) {
+        toast.success(data.message || 'Attendance report updated successfully')
+        setEditingReport(null)
+        await fetchAttendanceReports() // Refresh the list
+      } else {
+        toast.error(data.message || 'Failed to update attendance report')
+      }
+    } catch (error) {
+      console.error('Error updating report:', error)
+      toast.error('Failed to update attendance report')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const totalPages = Math.ceil(totalCount / filters.pageSize)
+
   useEffect(() => {
-    if (token) {
-      fetchMembers()
+    if (token && userData) {
       fetchActivities()
+      fetchMembers()
       fetchAttendanceReports()
     }
-  }, [token])
+  }, [token, userData])
 
   useEffect(() => {
     if (token) {
@@ -459,474 +614,393 @@ export function ManageAttendance() {
     }
   }, [token, filters])
 
-  const handleFilterChange = (key: keyof AttendanceFilters, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value, page: 1 }))
-  }
-
-  const totalPages = Math.ceil(totalCount / filters.pageSize)
-
-  if (loading && !attendanceReports.length) return <LoadingSpinner />
+  if (loading && !attendances.length) return <LoadingSpinner />
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
+      {/* Attendance Creation Section */}
       <div className="bg-white shadow sm:rounded-lg p-6">
-        <h2 className="text-lg font-medium mb-4">Filters</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">Create Attendance</h2>
+        
+        {/* Step 1: Activity Selection */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Select Activity</h3>
+          <select
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            value={selectedActivity}
+            onChange={(e) => setSelectedActivity(e.target.value)}
+            required
+          >
+            <option value="">Select an activity</option>
+            {activities.map((activity) => (
+              <option key={activity.id} value={activity.id}>
+                {activity.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Step 2: Member Attendance */}
+        {selectedActivity && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">Member</label>
-            <select
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              value={filters.memberId || ''}
-              onChange={(e) => handleFilterChange('memberId', e.target.value)}
-            >
-              <option value="">All Members</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.firstName} {member.lastName}
-                </option>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Mark Attendance</h3>
+              <button
+                type="button"
+                onClick={() => setShowFirstTimerForm(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Add First Timer
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {attendances.map((attendance, index) => (
+                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex-grow">
+                    <p className="font-medium">{attendance.fullName}</p>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox h-5 w-5 text-indigo-600"
+                        checked={attendance.isPresent}
+                        onChange={(e) => handleAttendanceChange(index, 'isPresent', e.target.checked)}
+                      />
+                      <span className="ml-2">Present</span>
+                    </label>
+                  </div>
+                </div>
               ))}
-            </select>
+            </div>
+
+            {/* Submit Button */}
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!selectedActivity || loading}
+                className="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
+              >
+                {loading ? 'Submitting...' : 'Submit Attendance'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Attendance Reports Section */}
+      <div className="bg-white shadow sm:rounded-lg p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">Attendance Reports</h2>
+        
+        {/* Filters */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium mb-4">Filters</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Member</label>
+              <select
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={filters.memberId || ''}
+                onChange={(e) => handleFilterChange('memberId', e.target.value)}
+              >
+                <option value="">All Members</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.firstName} {member.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Search</label>
+              <input
+                type="text"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                placeholder="Search..."
+                value={filters.search || ''}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Start Date</label>
+              <input
+                type="date"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={filters.startDate?.split('T')[0] || ''}
+                onChange={(e) => handleFilterChange('startDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">End Date</label>
+              <input
+                type="date"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={filters.endDate?.split('T')[0] || ''}
+                onChange={(e) => handleFilterChange('endDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Reports Table */}
+        <div className="mt-8">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Member
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Activity
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date & Time
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {attendanceReports.map((report) => (
+                  <tr key={report.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {report.memberFullName}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{report.activityName}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {new Date(report.date).toLocaleString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        report.isPresent ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {report.isPresent ? 'Present' : 'Absent'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => handleViewReport(report.id)}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => handleEditReport(report.id)}
+                        className="text-blue-600 hover:text-blue-900 mr-4"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReport(report.id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Search</label>
-            <input
-              type="text"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              placeholder="Search..."
-              value={filters.search || ''}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Start Date</label>
-            <input
-              type="date"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              value={filters.startDate?.split('T')[0] || ''}
-              onChange={(e) => handleFilterChange('startDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">End Date</label>
-            <input
-              type="date"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              value={filters.endDate?.split('T')[0] || ''}
-              onChange={(e) => handleFilterChange('endDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
-            />
+          {/* Pagination */}
+          <div className="mt-4 flex items-center justify-between">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => handleFilterChange('page', filters.page - 1)}
+                disabled={filters.page === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => handleFilterChange('page', filters.page + 1)}
+                disabled={filters.page >= totalPages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Next
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Showing page <span className="font-medium">{filters.page}</span> of{' '}
+                  <span className="font-medium">{totalPages}</span>
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                  <button
+                    onClick={() => handleFilterChange('page', filters.page - 1)}
+                    disabled={filters.page === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => handleFilterChange('page', filters.page + 1)}
+                    disabled={filters.page >= totalPages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </nav>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Create New Attendance Report Form */}
-      <div className="bg-white shadow sm:rounded-lg p-6">
-        <h2 className="text-lg font-medium mb-4">Create New Attendance Report</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {attendances.map((attendance, index) => (
-            <div key={index} className="space-y-4">
+      {/* First Timer Modal */}
+      {showFirstTimerForm && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Add First Timer</h3>
+            <form onSubmit={handleFirstTimerSubmit} className="space-y-4">
               <div>
-                <label htmlFor="member" className="block text-sm font-medium text-gray-700">
-                  Member
-                </label>
-                <select
-                  id="member"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                  value={attendance.memberId}
-                  onChange={(e) => handleAttendanceChange(index, 'memberId', e.target.value)}
-                  required
-                >
-                  <option value="">Select a member</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.firstName} {member.lastName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="activity" className="block text-sm font-medium text-gray-700">
-                  Activity
-                </label>
-                <select
-                  id="activity"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                  value={attendance.activityId}
-                  onChange={(e) => handleAttendanceChange(index, 'activityId', e.target.value)}
-                  required
-                >
-                  <option value="">Select an activity</option>
-                  {activities.map((activity) => (
-                    <option key={activity.id} value={activity.id}>
-                      {activity.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="date" className="block text-sm font-medium text-gray-700">
-                  Date
-                </label>
+                <label className="block text-sm font-medium text-gray-700">First Name</label>
                 <input
-                  type="datetime-local"
-                  id="date"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                  value={attendance.date.slice(0, 16)}
-                  onChange={(e) => handleAttendanceChange(index, 'date', new Date(e.target.value).toISOString())}
+                  type="text"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  value={firstTimerForm.firstName}
+                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, firstName: e.target.value })}
                   required
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Attendance Status
-                </label>
-                <div className="mt-2">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox h-4 w-4 text-indigo-600"
-                      checked={attendance.isPresent}
-                      onChange={(e) => handleAttendanceChange(index, 'isPresent', e.target.checked)}
-                    />
-                    <span className="ml-2">Present</span>
-                  </label>
-                </div>
+                <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                <input
+                  type="text"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  value={firstTimerForm.lastName}
+                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, lastName: e.target.value })}
+                  required
+                />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  First Timer
-                </label>
-                <div className="mt-2">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox h-4 w-4 text-indigo-600"
-                      checked={attendance.isFirstTimer}
-                      onChange={(e) => handleAttendanceChange(index, 'isFirstTimer', e.target.checked)}
-                    />
-                    <span className="ml-2">First Timer</span>
-                  </label>
-                </div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  value={firstTimerForm.email}
+                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, email: e.target.value })}
+                />
               </div>
-
-              {attendance.isFirstTimer && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    First Timer Details
-                  </label>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      First Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={firstTimerForm.firstName}
-                      onChange={(e) => handleFirstTimerChange('firstName', e.target.value)}
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Last Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={firstTimerForm.lastName}
-                      onChange={(e) => handleFirstTimerChange('lastName', e.target.value)}
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={firstTimerForm.email}
-                      onChange={(e) => handleFirstTimerChange('email', e.target.value)}
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={firstTimerForm.phoneNumber}
-                      onChange={(e) => handleFirstTimerChange('phoneNumber', e.target.value)}
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Gender
-                    </label>
-                    <select
-                      required
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={firstTimerForm.gender}
-                      onChange={(e) => handleFirstTimerChange('gender', e.target.value)}
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          <div>
-            <button
-              type="button"
-              onClick={handleAddAttendance}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Add Attendance
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Attendance Reports List */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-          <h2 className="text-lg font-medium">Attendance Reports</h2>
-          <div className="flex items-center space-x-4">
-            <select
-              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              value={filters.sortColumn}
-              onChange={(e) => handleFilterChange('sortColumn', e.target.value)}
-            >
-              <option value="date">Date</option>
-              <option value="memberName">Member Name</option>
-              <option value="activityName">Activity Name</option>
-            </select>
-            <select
-              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              value={filters.sortOrder}
-              onChange={(e) => handleFilterChange('sortOrder', e.target.value as 'asc' | 'desc')}
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </div>
-        </div>
-        <div className="border-t border-gray-200">
-          <ul className="divide-y divide-gray-200">
-            {attendanceReports.map((report) => (
-              <li key={report.id} className="px-4 py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{report.memberName}</p>
-                    <p className="text-sm text-gray-500">{report.activityName}</p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(report.date).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        report.isPresent
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {report.isPresent ? 'Present' : 'Absent'}
-                    </span>
-                    <button
-                      onClick={() => fetchAttendanceDetails(report.id)}
-                      className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => fetchAttendanceReportById(report.id)}
-                      className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteAttendanceReport(report.id)}
-                      className="text-red-600 hover:text-red-900 text-sm font-medium"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Pagination */}
-        <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-          <div className="flex-1 flex justify-between sm:hidden">
-            <button
-              onClick={() => handleFilterChange('page', Math.max(1, filters.page - 1))}
-              disabled={filters.page === 1}
-              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => handleFilterChange('page', Math.min(totalPages, filters.page + 1))}
-              disabled={filters.page === totalPages}
-              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Next
-            </button>
-          </div>
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{(filters.page - 1) * filters.pageSize + 1}</span> to{' '}
-                <span className="font-medium">
-                  {Math.min(filters.page * filters.pageSize, totalCount)}
-                </span>{' '}
-                of <span className="font-medium">{totalCount}</span> results
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <button
-                  onClick={() => handleFilterChange('page', Math.max(1, filters.page - 1))}
-                  disabled={filters.page === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                <input
+                  type="tel"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  value={firstTimerForm.phoneNumber}
+                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, phoneNumber: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Gender</label>
+                <select
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                  value={firstTimerForm.gender}
+                  onChange={(e) => setFirstTimerForm({ ...firstTimerForm, gender: e.target.value as Gender })}
+                  required
                 >
-                  Previous
-                </button>
-                {/* Add page numbers here if needed */}
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+              <div className="mt-5 sm:mt-6 space-x-3">
                 <button
-                  onClick={() => handleFilterChange('page', Math.min(totalPages, filters.page + 1))}
-                  disabled={filters.page === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  Next
+                  {loading ? 'Saving...' : 'Save First Timer'}
                 </button>
-              </nav>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFirstTimerForm(false)}
+                  className="inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* View Attendance Modal */}
+      {/* View Report Modal */}
       {viewingReport && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium">Attendance Details</h3>
+              <h3 className="text-lg font-medium text-gray-900">View Attendance Report</h3>
               <button
                 onClick={() => setViewingReport(null)}
                 className="text-gray-400 hover:text-gray-500"
               >
+                <span className="sr-only">Close</span>
                 <XMarkIcon className="h-6 w-6" aria-hidden="true" />
               </button>
             </div>
-            
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Member Name</label>
-                  <p className="mt-1 text-sm text-gray-900">{viewingReport.memberFullName}</p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Activity</label>
-                  <p className="mt-1 text-sm text-gray-900">{viewingReport.activityName}</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Date</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {new Date(viewingReport.date).toLocaleString()}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Attendance Status</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {viewingReport.isPresent ? 'Present' : 'Absent'}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">First Timer</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {viewingReport.isFirstTimer ? 'Yes' : 'No'}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Notes</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {viewingReport.notes || 'No notes'}
-                  </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Member</label>
+                <div className="mt-1 text-sm text-gray-900">{viewingReport.memberFullName}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Activity</label>
+                <div className="mt-1 text-sm text-gray-900">{viewingReport.activityName}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Date & Time</label>
+                <div className="mt-1 text-sm text-gray-900">
+                  {new Date(viewingReport.date).toLocaleString()}
                 </div>
               </div>
-
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">System Information</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Created By</label>
-                    <p className="mt-1 text-sm text-gray-900">{viewingReport.createdBy}</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Created At</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {new Date(viewingReport.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-
-                  {viewingReport.modifiedBy && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Modified By</label>
-                        <p className="mt-1 text-sm text-gray-900">{viewingReport.modifiedBy}</p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Updated At</label>
-                        <p className="mt-1 text-sm text-gray-900">
-                          {viewingReport.updatedAt ? new Date(viewingReport.updatedAt).toLocaleString() : 'N/A'}
-                        </p>
-                      </div>
-                    </>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                    <p className="mt-1 text-sm text-gray-900">{viewingReport.status}</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Active Status</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {viewingReport.isActive ? 'Active' : 'Inactive'}
-                    </p>
-                  </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <div className="mt-1">
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    viewingReport.isPresent ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {viewingReport.isPresent ? 'Present' : 'Absent'}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">First Timer</label>
+                <div className="mt-1 text-sm text-gray-900">
+                  {viewingReport.isFirstTimer ? 'Yes' : 'No'}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Notes</label>
+                <div className="mt-1 text-sm text-gray-900">
+                  {viewingReport.notes || 'No notes'}
                 </div>
               </div>
             </div>
-
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6">
               <button
                 type="button"
                 onClick={() => setViewingReport(null)}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                className="w-full inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 Close
               </button>
@@ -934,79 +1008,79 @@ export function ManageAttendance() {
           </div>
         </div>
       )}
-      {showFirstTimerForm && (
+
+      {/* Edit Report Modal */}
+      {editingReport && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full">
-            <h3 className="text-lg font-medium mb-4">First Timer Details</h3>
-            <form onSubmit={handleFirstTimerSubmit} className="space-y-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Edit Attendance Report</h3>
+              <button
+                onClick={() => setEditingReport(null)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Close</span>
+                <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateReport} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">First Name</label>
-                <input
-                  type="text"
-                  required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  value={firstTimerForm.firstName}
-                  onChange={(e) => handleFirstTimerChange('firstName', e.target.value)}
-                />
+                <label className="block text-sm font-medium text-gray-700">Member</label>
+                <div className="mt-1 text-sm text-gray-900">{editingReport.memberFullName}</div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Last Name</label>
-                <input
-                  type="text"
-                  required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  value={firstTimerForm.lastName}
-                  onChange={(e) => handleFirstTimerChange('lastName', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
-                <input
-                  type="email"
-                  required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  value={firstTimerForm.email}
-                  onChange={(e) => handleFirstTimerChange('email', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                <input
-                  type="tel"
-                  required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  value={firstTimerForm.phoneNumber}
-                  onChange={(e) => handleFirstTimerChange('phoneNumber', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Gender</label>
+                <label className="block text-sm font-medium text-gray-700">Activity</label>
                 <select
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                  value={editingReport.activityId}
+                  onChange={(e) => setEditingReport(prev => ({ ...prev!, activityId: e.target.value }))}
                   required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  value={firstTimerForm.gender}
-                  onChange={(e) => handleFirstTimerChange('gender', e.target.value)}
                 >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
+                  {activities.map((activity) => (
+                    <option key={activity.id} value={activity.id}>
+                      {activity.name}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowFirstTimerForm(false)
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Date & Time</label>
+                <input
+                  type="datetime-local"
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  value={editingReport.date.split('.')[0]} // Remove milliseconds
+                  onChange={(e) => setEditingReport(prev => ({ ...prev!, date: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <div className="mt-1">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-5 w-5 text-indigo-600"
+                      checked={editingReport.isPresent}
+                      onChange={(e) => setEditingReport(prev => ({ ...prev!, isPresent: e.target.checked }))}
+                    />
+                    <span className="ml-2">Present</span>
+                  </label>
+                </div>
+              </div>
+              <div className="mt-6 flex space-x-3">
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                   disabled={loading}
+                  className="flex-1 inline-flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  {loading ? 'Saving...' : 'Save'}
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingReport(null)}
+                  className="flex-1 inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
                 </button>
               </div>
             </form>
