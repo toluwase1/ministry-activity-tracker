@@ -481,13 +481,13 @@ export function ManageMembers() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Discipler</label>
+              <label className="block text-sm font-medium text-gray-700">Worker-In-Charge-Of</label>
               <select
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 value={newMember.disciplerId}
                 onChange={(e) => setNewMember({ ...newMember, disciplerId: e.target.value })}
               >
-                <option value="">Select Discipler (Optional)</option>
+                <option value="">Select Worker-In-Charge-Of (Optional)</option>
                 {potentialDisciplers.map((discipler) => (
                   <option key={discipler.id} value={discipler.id}>
                     {discipler.firstName} {discipler.lastName}
@@ -754,7 +754,7 @@ export function ManageMembers() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Discipler</label>
+                  <label className="block text-sm font-medium text-gray-700">Worker-In-Charge-Of</label>
                   <select
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     value={editingMember.disciplerId}
@@ -762,7 +762,7 @@ export function ManageMembers() {
                       setEditingMember({ ...editingMember, disciplerId: e.target.value })
                     }
                   >
-                    <option value="">Select Discipler (Optional)</option>
+                    <option value="">Select Worker-In-Charge-Of (Optional)</option>
                     {potentialDisciplers.map((discipler) => (
                       <option key={discipler.id} value={discipler.id}>
                         {discipler.firstName} {discipler.lastName}
