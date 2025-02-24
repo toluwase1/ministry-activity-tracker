@@ -236,6 +236,13 @@ export function ManageMembers() {
     e.preventDefault()
     try {
       setLoading(true)
+      console.log('Creating member with data:', newMember)
+      
+      const memberData = {
+        ...newMember,
+        disciplerId: newMember.disciplerId || null
+      }
+      
       const response = await fetch(getApiUrl('Member'), {
         method: 'POST',
         headers: {
@@ -243,10 +250,16 @@ export function ManageMembers() {
           'Content-Type': 'application/json',
           Accept: 'application/json'
         },
-        body: JSON.stringify(newMember)
+        body: JSON.stringify(memberData)
       })
 
       const data = await response.json()
+      console.log('API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data
+      })
+      
       if (handleApiResponse(data) && response.ok) {
         toast.success('Member created successfully')
         setNewMember({
@@ -260,6 +273,9 @@ export function ManageMembers() {
           fellowshipId: ''
         })
         await fetchMembers()
+      } else {
+        console.error('API Error Response:', data)
+        toast.error(data.message || 'Failed to create member')
       }
     } catch (error) {
       console.error('Error creating member:', error)
