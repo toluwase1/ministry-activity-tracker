@@ -44,11 +44,11 @@ export default function DashboardLayout({
       label: 'Fellowships',
       allowedRoles: ['Pastor']
     },
-    {
-      href: '/dashboard/pastors',
-      label: 'Pastors',
-      allowedRoles: ['Pastor']
-    },
+    // {
+    //   href: '/dashboard/pastors',
+    //   label: 'Pastors',
+    //   allowedRoles: ['Pastor']
+    // },
     {
       href: '/dashboard/members',
       label: 'Members',
