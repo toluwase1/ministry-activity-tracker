@@ -69,7 +69,7 @@ export function ManageMembers() {
     email: '',
     phoneNumber: '',
     gender: '',
-    memberType: MemberType.Pastor,
+    memberType: MemberType.WorkersInTraining,
     disciplerId: '',
     fellowshipId: ''
   })
