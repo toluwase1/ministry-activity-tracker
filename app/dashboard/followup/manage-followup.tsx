@@ -267,8 +267,34 @@ export function ManageFollowUpReports() {
       })
 
       const data = await response.json()
+      console.log('API Response for fetch:', data)
+      console.log('Original report ID:', reportId)
+      
       if (handleApiResponse(data) && response.ok) {
-        setFollowUpDetails(Array.isArray(data.result) ? data.result : [])
+        // The report comes as an array of follow-up details
+        const reportDetails = Array.isArray(data.result) ? data.result : [data.result]
+        console.log('Raw report details:', reportDetails)
+        
+        // Get the report details from the response
+        const detail = reportDetails[0] // Get the first detail since edit is for single report
+        
+        // Map to our state structure
+        const followUpDetails = [{
+          memberId: detail.memberId || '',
+          activityId: detail.activityId || '',
+          followUpType: detail.followUpType || 'Visitation',
+          fullName: detail.fullName || '',
+          notes: detail.notes || '',
+          date: detail.date || new Date().toISOString()
+        }]
+        
+        const editingState = {
+          reportId: reportId, // Use the original ID passed to the function
+          followUpDetails
+        }
+        console.log('Setting editing state:', editingState)
+        
+        setFollowUpDetails(followUpDetails)
       }
     } catch (error) {
       console.error('Error fetching follow-up details:', error)
@@ -321,6 +347,24 @@ export function ManageFollowUpReports() {
 
     try {
       setLoading(true)
+      const followUpDetail = editingReport.followUpDetails[0]
+      
+      // Ensure the date is in the correct ISO format
+      const formattedDate = new Date(followUpDetail.date).toISOString()
+      
+      // Construct the payload exactly as the API expects
+      const payload = {
+        reportId: editingReport.reportId,
+        memberId: followUpDetail.memberId,
+        activityId: followUpDetail.activityId,
+        followUpType: followUpDetail.followUpType,
+        fullName: followUpDetail.fullName,
+        notes: followUpDetail.notes || '',
+        date: formattedDate
+      }
+      
+      console.log('Sending update payload:', payload)
+      
       const response = await fetch(getApiUrl(`FollowupReport/edit`), {
         method: 'POST',
         headers: {
@@ -328,17 +372,17 @@ export function ManageFollowUpReports() {
           'Content-Type': 'application/json',
           Accept: 'application/json'
         },
-        body: JSON.stringify({
-          id: editingReport.reportId,
-          ...editingReport.followUpDetails[0] // Spread the first follow-up detail
-        })
+        body: JSON.stringify(payload)
       })
+
+      console.log('Update response status:', response.status)
+      const data = await response.json()
+      console.log('Update response data:', data)
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const data = await response.json()
       if (data.success) {
         toast.success('Report updated successfully')
         setEditingReport(null)
@@ -482,6 +526,17 @@ export function ManageFollowUpReports() {
   const handleEditReport = async (id: string) => {
     try {
       setLoading(true)
+      console.log('Fetching report with ID:', id)
+
+      // First, ensure we have the members list and activities
+      if (members.length === 0) {
+        await fetchMembers()
+      }
+      if (activities.length === 0) {
+        await fetchActivities()
+      }
+      
+      // Fetch the report details
       const response = await fetch(getApiUrl(`FollowupReport/${id}`), {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -489,26 +544,34 @@ export function ManageFollowUpReports() {
         }
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
       const data = await response.json()
-      console.log('Edit report response:', data) // Debug log
-
-      if (data.success) {
-        // Initialize with empty array if no details exist
-        setEditingReport({
-          reportId: id,
-          followUpDetails: [{
-            memberId: data.result.memberId,
-            activityId: data.result.activityId,
-            followUpType: data.result.followUpType || 'Visitation',
-            fullName: data.result.fullName || '',
-            notes: data.result.notes || '',
-            date: data.result.date || new Date().toISOString()
-          }]
-        })
+      console.log('API Response:', data)
+      
+      if (handleApiResponse(data) && response.ok) {
+        // The report comes as an array of follow-up details
+        const reportDetails = Array.isArray(data.result) ? data.result : [data.result]
+        console.log('Raw report details:', reportDetails)
+        
+        // Get the report details from the response
+        const detail = reportDetails[0] // Get the first detail since edit is for single report
+        
+        // Map to our state structure
+        const followUpDetails = [{
+          memberId: detail.memberId || '',
+          activityId: detail.activityId || '',
+          followUpType: detail.followUpType || 'Visitation',
+          fullName: detail.fullName || '',
+          notes: detail.notes || '',
+          date: detail.date || new Date().toISOString()
+        }]
+        
+        const editingState = {
+          reportId: id, // Use the original ID passed to the function
+          followUpDetails
+        }
+        console.log('Setting editing state:', editingState)
+        
+        setEditingReport(editingState)
       } else {
         toast.error(data.message || 'Failed to load report details')
       }
@@ -867,12 +930,23 @@ export function ManageFollowUpReports() {
                           onChange={(e) => handleFollowUpDetailChange(index, 'memberId', e.target.value)}
                           required
                         >
+                          <option value="">Select Member</option>
                           {members.map((member) => (
                             <option key={member.id} value={member.id}>
                               {member.firstName} {member.lastName}
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                        <input
+                          type="text"
+                          className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          value={detail.fullName}
+                          readOnly
+                        />
                       </div>
 
                       <div>
@@ -883,6 +957,7 @@ export function ManageFollowUpReports() {
                           onChange={(e) => handleFollowUpDetailChange(index, 'activityId', e.target.value)}
                           required
                         >
+                          <option value="">Select Activity</option>
                           {activities.map((activity) => (
                             <option key={activity.id} value={activity.id}>
                               {activity.name}
@@ -902,16 +977,6 @@ export function ManageFollowUpReports() {
                           <option value="Teaching">Teaching</option>
                           <option value="Visitation">Visitation</option>
                         </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                        <input
-                          type="text"
-                          className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          value={detail.fullName}
-                          readOnly
-                        />
                       </div>
 
                       <div className="col-span-2">
@@ -951,10 +1016,9 @@ export function ManageFollowUpReports() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-                  disabled={loading}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  {loading ? 'Saving...' : 'Save Changes'}
+                  Save Changes
                 </button>
               </div>
             </form>
