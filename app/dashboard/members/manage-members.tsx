@@ -181,18 +181,21 @@ export function ManageMembers() {
 
     try {
       setLoading(true)
-      const response = await fetch(getApiUrl(`Member/${id}`), {
+      console.log('Fetching member for view:', id)
+      const url = getApiUrl(`Member/${id}`)
+      console.log('View Request URL:', url)
+      
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json'
         }
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch member details')
-      }
-
+      console.log('View Response Status:', response.status)
       const data = await response.json()
+      console.log('View Response Data:', data)
+
       if (handleApiResponse(data)) {
         setSelectedMember(data.result)
       }
@@ -209,23 +212,30 @@ export function ManageMembers() {
 
     try {
       setLoading(true)
-      const response = await fetch(getApiUrl(`Member/${id}`), {
+      console.log('Fetching member for edit:', id)
+      const url = getApiUrl(`Member/${id}`)
+      console.log('Edit Fetch URL:', url)
+      
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json'
         }
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch member details')
-      }
-
+      console.log('Edit Fetch Response Status:', response.status)
       const data = await response.json()
+      console.log('Edit Fetch Response Data:', data)
+
       if (handleApiResponse(data)) {
-        setEditingMember(data.result)
+        setEditingMember({
+          ...data.result,
+          id: id,  // Preserve the ID from the URL parameter
+          isActive: data.result.isActive ?? true // Ensure isActive is included
+        })
       }
     } catch (error) {
-      console.error('Error fetching member:', error)
+      console.error('Error fetching member for edit:', error)
       toast.error('Failed to load member details')
     } finally {
       setLoading(false)
@@ -291,22 +301,44 @@ export function ManageMembers() {
 
     try {
       setLoading(true)
-      const response = await fetch(getApiUrl('Member/edit'), {
+      console.log('Updating member with data:', editingMember)
+      const url = getApiUrl('Member/edit')
+      console.log('Update URL:', url)
+      
+      const body = {
+        memberId: editingMember.id,
+        firstName: editingMember.firstName,
+        lastName: editingMember.lastName,
+        email: editingMember.email,
+        phoneNumber: editingMember.phoneNumber,
+        gender: editingMember.gender,
+        memberType: editingMember.memberType,
+        disciplerId: editingMember.disciplerId || null,
+        fellowshipId: editingMember.fellowshipId,
+        isActive: true
+      };
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           Accept: 'application/json'
         },
-        body: JSON.stringify(editingMember)
+        body: JSON.stringify(body)
       })
-
+      console.log('Update Request Body:', body)
+      console.log('Update Response Status:', response.status)
       const data = await response.json()
+      console.log('Update Response Data:', data)
+
       if (handleApiResponse(data) && response.ok) {
         toast.success('Member updated successfully')
         setEditingMember(null)
-        setSelectedMember(null)
         await fetchMembers()
+      } else {
+        console.error('API Error Response:', data)
+        toast.error(data.message || 'Failed to update member')
       }
     } catch (error) {
       console.error('Error updating member:', error)
@@ -793,7 +825,7 @@ export function ManageMembers() {
       )}
 
       {/* View Modal */}
-      {selectedMember && (
+      {selectedMember && !editingMember && (
         <div
           className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4"
           tabIndex={-1}
@@ -850,7 +882,7 @@ export function ManageMembers() {
       )}
 
       {/* Member Approval Modal */}
-      {selectedMember && (
+      {selectedMember && selectedMember.status === 'Pending' && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-medium mb-4">Approve Member</h3>
