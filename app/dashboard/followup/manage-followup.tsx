@@ -78,6 +78,7 @@ export function ManageFollowUpReports() {
   const { token, userData } = useAuth()
   const [loading, setLoading] = useState(false)
   const [followUpReports, setFollowUpReports] = useState<FollowUpReport[]>([])
+  const [members, setMembers] = useState<Member[]>([])
   const [currentMember, setCurrentMember] = useState<Member | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -94,7 +95,7 @@ export function ManageFollowUpReports() {
       memberId: '',
       activityId: '',
       followUpType: 'Visitation',
-      fullName: '',
+      fullName: 'Select a member to populate name',
       notes: '',
       date: new Date().toISOString()
     }]
@@ -116,6 +117,7 @@ export function ManageFollowUpReports() {
 
   useEffect(() => {
     if (token && userData?.userId) {
+      fetchMembers()
       fetchCurrentMember()
       fetchActivities()
       fetchFollowUpReports()
@@ -129,6 +131,40 @@ export function ManageFollowUpReports() {
       setFollowUpDetails([])
     }
   }, [selectedReport])
+
+  const fetchMembers = async () => {
+    if (!token) return
+
+    try {
+      setLoading(true)
+      const queryParams = new URLSearchParams({
+        page: '1',
+        pageSize: '100',
+        ...(userData?.userType === "WorkersInTraining" && userData?.userId && { disciplerId: userData.userId })
+      })
+
+      const response = await fetch(getApiUrl(`Member?${queryParams}`), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch members')
+      }
+
+      const data = await response.json()
+      if (handleApiResponse(data)) {
+        setMembers(data.result.items)
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error)
+      toast.error('Failed to load members')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const fetchCurrentMember = async () => {
     if (!userData?.userId) return
@@ -144,14 +180,6 @@ export function ManageFollowUpReports() {
       const data = await response.json()
       if (handleApiResponse(data) && response.ok) {
         setCurrentMember(data.result)
-        // Pre-populate the new report with the current member's information
-        setNewReport(prev => ({
-          followUpDetails: prev.followUpDetails.map(detail => ({
-            ...detail,
-            memberId: userData.userId,
-            fullName: userData.fullName
-          }))
-        }))
       }
     } catch (error) {
       console.error('Error fetching current member:', error)
@@ -272,7 +300,7 @@ export function ManageFollowUpReports() {
             memberId: '',
             activityId: '',
             followUpType: 'Visitation',
-            fullName: '',
+            fullName: 'Select a member to populate name',
             notes: '',
             date: new Date().toISOString()
           }]
@@ -363,7 +391,7 @@ export function ManageFollowUpReports() {
           memberId: '',
           activityId: '',
           followUpType: 'Visitation',
-          fullName: '',
+          fullName: 'Select a member to populate name',
           notes: '',
           date: new Date().toISOString()
         }]
@@ -375,7 +403,7 @@ export function ManageFollowUpReports() {
           memberId: '',
           activityId: '',
           followUpType: 'Visitation',
-          fullName: '',
+          fullName: 'Select a member to populate name',
           notes: '',
           date: new Date().toISOString()
         }]
@@ -404,14 +432,38 @@ export function ManageFollowUpReports() {
   const handleFollowUpDetailChange = (index: number, field: keyof FollowUpDetail, value: string) => {
     if (editingReport) {
       const newDetails = [...editingReport.followUpDetails]
-      newDetails[index] = { ...newDetails[index], [field]: value }
+      if (field === 'memberId') {
+        // Find the selected member and update the fullName
+        const selectedMember = members.find(m => m.id === value)
+        if (selectedMember) {
+          newDetails[index] = { 
+            ...newDetails[index], 
+            memberId: value,
+            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`
+          }
+        }
+      } else {
+        newDetails[index] = { ...newDetails[index], [field]: value }
+      }
       setEditingReport({
         ...editingReport,
         followUpDetails: newDetails
       })
     } else {
       const newDetails = [...newReport.followUpDetails]
-      newDetails[index] = { ...newDetails[index], [field]: value }
+      if (field === 'memberId') {
+        // Find the selected member and update the fullName
+        const selectedMember = members.find(m => m.id === value)
+        if (selectedMember) {
+          newDetails[index] = { 
+            ...newDetails[index], 
+            memberId: value,
+            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`
+          }
+        }
+      } else {
+        newDetails[index] = { ...newDetails[index], [field]: value }
+      }
       setNewReport({
         ...newReport,
         followUpDetails: newDetails
@@ -516,11 +568,11 @@ export function ManageFollowUpReports() {
                       required
                     >
                       <option value="">Select Member</option>
-                      {currentMember && (
-                        <option key={currentMember.id} value={currentMember.id}>
-                          {currentMember.firstName} {currentMember.lastName}
+                      {members.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.firstName} {member.lastName}
                         </option>
-                      )}
+                      ))}
                     </select>
                   </div>
 
@@ -558,20 +610,20 @@ export function ManageFollowUpReports() {
                     <label className="block text-sm font-medium text-gray-700">Full Name</label>
                     <input
                       type="text"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={detail.fullName}
-                      onChange={(e) => handleFollowUpDetailChange(index, 'fullName', e.target.value)}
-                      required
+                      readOnly
                     />
                   </div>
 
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700">Notes</label>
-                    <input
-                      type="text"
+                    <textarea
+                      rows={3}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       value={detail.notes}
                       onChange={(e) => handleFollowUpDetailChange(index, 'notes', e.target.value)}
+                      placeholder="Enter detailed notes about the follow-up..."
                       required
                     />
                   </div>
@@ -621,11 +673,11 @@ export function ManageFollowUpReports() {
               onChange={(e) => handleFilterChange('memberId', e.target.value)}
             >
               <option value="">All Members</option>
-              {currentMember && (
-                <option key={currentMember.id} value={currentMember.id}>
-                  {currentMember.firstName} {currentMember.lastName}
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.firstName} {member.lastName}
                 </option>
-              )}
+              ))}
             </select>
             <div className="flex items-center space-x-2">
               <input
@@ -815,11 +867,11 @@ export function ManageFollowUpReports() {
                           onChange={(e) => handleFollowUpDetailChange(index, 'memberId', e.target.value)}
                           required
                         >
-                          {currentMember && (
-                            <option key={currentMember.id} value={currentMember.id}>
-                              {currentMember.firstName} {currentMember.lastName}
+                          {members.map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {member.firstName} {member.lastName}
                             </option>
-                          )}
+                          ))}
                         </select>
                       </div>
 
@@ -856,20 +908,20 @@ export function ManageFollowUpReports() {
                         <label className="block text-sm font-medium text-gray-700">Full Name</label>
                         <input
                           type="text"
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                           value={detail.fullName}
-                          onChange={(e) => handleFollowUpDetailChange(index, 'fullName', e.target.value)}
-                          required
+                          readOnly
                         />
                       </div>
 
-                      <div>
+                      <div className="col-span-2">
                         <label className="block text-sm font-medium text-gray-700">Notes</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={3}
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                           value={detail.notes}
                           onChange={(e) => handleFollowUpDetailChange(index, 'notes', e.target.value)}
+                          placeholder="Enter detailed notes about the follow-up..."
                           required
                         />
                       </div>
