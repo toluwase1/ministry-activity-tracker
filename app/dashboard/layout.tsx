@@ -52,7 +52,7 @@ export default function DashboardLayout({
     {
       href: '/dashboard/members',
       label: 'Members',
-      allowedRoles: ['Pastor']
+      allowedRoles: ['Pastor', 'WorkersInTraining']
     },
     {
       href: '/dashboard/outreach',
