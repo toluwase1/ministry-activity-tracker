@@ -51,7 +51,7 @@ interface MemberFilters {
 }
 
 export function ManageMembers() {
-  const { token } = useAuth()
+  const { token, userData } = useAuth()
   const [loading, setLoading] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [fellowships, setFellowships] = useState<Fellowship[]>([])
@@ -91,7 +91,8 @@ export function ManageMembers() {
         pageSize: filters.pageSize.toString(),
         ...(filters.search && { search: filters.search }),
         ...(filters.sortColumn && { sortColumn: filters.sortColumn }),
-        ...(filters.sortOrder && { sortOrder: filters.sortOrder })
+        ...(filters.sortOrder && { sortOrder: filters.sortOrder }),
+        ...(userData?.userType === "WorkersInTraining" && userData?.userId && { disciplerId: userData.userId })
       })
 
       const response = await fetch(getApiUrl(`Member?${queryParams}`), {
