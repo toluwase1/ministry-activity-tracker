@@ -416,7 +416,8 @@ export function ManageMembers() {
   const handleFilterChange = (field: keyof MemberFilters, value: string) => {
     setFilters((prev) => ({
       ...prev,
-      [field]: value
+      [field]: field === 'page' ? parseInt(value) : value,
+      ...(field !== 'page' && { page: 1 }) // Reset to first page when changing other filters
     }))
   }
 
@@ -667,6 +668,19 @@ export function ManageMembers() {
                 >
                   Previous
                 </button>
+                {Array.from({ length: Math.ceil(totalCount / filters.pageSize) }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    onClick={() => handleFilterChange('page', pageNum.toString())}
+                    className={`relative inline-flex items-center px-4 py-2 border ${
+                      pageNum === filters.page
+                        ? 'bg-indigo-50 border-indigo-500 text-indigo-600'
+                        : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                    } text-sm font-medium`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
                 <button
                   onClick={() => handleFilterChange('page', (filters.page + 1).toString())}
                   disabled={filters.page * filters.pageSize >= totalCount}
