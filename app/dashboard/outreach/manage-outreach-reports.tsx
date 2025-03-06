@@ -58,6 +58,7 @@ export function ManageOutreachReports() {
   const [members, setMembers] = useState<Member[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [totalCount, setTotalCount] = useState(0)
+  const { userData } = useAuth()
   const [filters, setFilters] = useState<OutreachFilters>({
     page: 1,
     pageSize: 10,
@@ -136,8 +137,16 @@ export function ManageOutreachReports() {
         ...(filters.startDate && { startDate: filters.startDate }),
         ...(filters.endDate && { endDate: filters.endDate }),
         ...(filters.sortColumn && { sortColumn: filters.sortColumn }),
-        ...(filters.sortOrder && { sortOrder: filters.sortOrder })
+        ...(filters.sortOrder && { sortOrder: filters.sortOrder }),
+      
+        // Add memberId filter for WorkersInTraining users
+        ...(userData?.userType === "WorkersInTraining" && userData?.userId && { memberId: userData.userId })
       })
+
+      //  // Add memberId filter for WorkersInTraining users
+      //  if (userData?.userType === "WorkersInTraining" && userData?.userId) {
+      //   queryParams.append('disciplerId', userData.userId)
+      // }
 
       const response = await fetch(getApiUrl(`OutreachReport?${queryParams}`), {
         headers: {
@@ -290,12 +299,14 @@ export function ManageOutreachReports() {
     if (editingReport) {
       setEditingReport({
         ...editingReport,
-        outreachDetails: [...editingReport.outreachDetails, { fullName: '', address: '', phoneNumber: '' }]
+        outreachDetails: [...editingReport.outreachDetails, { fullName: '', address: '', phoneNumber: '' }],
+        totalPeopleReached: editingReport.outreachDetails.length + 1
       })
     } else {
       setNewReport({
         ...newReport,
-        outreachDetails: [...newReport.outreachDetails, { fullName: '', address: '', phoneNumber: '' }]
+        outreachDetails: [...newReport.outreachDetails, { fullName: '', address: '', phoneNumber: '' }],
+        totalPeopleReached: newReport.outreachDetails.length + 1
       })
     }
   }
@@ -306,14 +317,16 @@ export function ManageOutreachReports() {
       newDetails.splice(index, 1)
       setEditingReport({
         ...editingReport,
-        outreachDetails: newDetails
+        outreachDetails: newDetails,
+        totalPeopleReached: newDetails.length
       })
     } else {
       const newDetails = [...newReport.outreachDetails]
       newDetails.splice(index, 1)
       setNewReport({
         ...newReport,
-        outreachDetails: newDetails
+        outreachDetails: newDetails,
+        totalPeopleReached: newDetails.length
       })
     }
   }
@@ -398,11 +411,9 @@ export function ManageOutreachReports() {
               <label className="block text-sm font-medium text-gray-700">Total People Reached</label>
               <input
                 type="number"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={newReport.totalPeopleReached}
-                onChange={(e) => setNewReport({ ...newReport, totalPeopleReached: parseInt(e.target.value) })}
-                required
+                className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={newReport.outreachDetails.length}
+                readOnly
               />
             </div>
 
