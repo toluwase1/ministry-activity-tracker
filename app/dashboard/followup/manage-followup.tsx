@@ -94,8 +94,8 @@ export function ManageFollowUpReports() {
   })
   const [newReport, setNewReport] = useState({
     followUpDetails: [{
-      memberId: '',
-      discipleId: userData?.userId || '',
+      memberId: userData?.userId || '',
+      discipleId: '',
       activityId: '',
       followUpType: 'Visitation',
       fullName: 'Select a member to populate name',
@@ -223,6 +223,11 @@ export function ManageFollowUpReports() {
       if (filters.search) queryParams.append('Search', filters.search)
       if (filters.memberId) queryParams.append('MemberId', filters.memberId)
       
+      // // Add memberId filter for WorkersInTraining users
+      // if (userData?.userType === "WorkersInTraining" && userData?.userId) {
+      //   queryParams.append('MemberId', userData.userId)
+      // }
+      
       // Pagination and sorting
       queryParams.append('Page', filters.page.toString())
       queryParams.append('PageSize', filters.pageSize.toString())
@@ -309,13 +314,16 @@ export function ManageFollowUpReports() {
     try {
       setLoading(true)
       
-      // Ensure discipleId is set for each follow-up detail
-      const reportWithDiscipleId = {
+      // Ensure memberId is set to current user's ID and discipleId is set from selected member
+      const reportWithIds = {
         followUpDetails: newReport.followUpDetails.map(detail => ({
           ...detail,
-          discipleId: userData?.userId || '' // Set discipleId from userData
+          memberId: userData?.userId || '', // Ensure memberId is current user's ID
         }))
       }
+      
+      console.log('Request payload:', reportWithIds)
+      console.log('Current user:', userData)
       
       const response = await fetch(getApiUrl('FollowupReport'), {
         method: 'POST',
@@ -324,7 +332,7 @@ export function ManageFollowUpReports() {
           'Content-Type': 'application/json',
           Accept: 'application/json'
         },
-        body: JSON.stringify(reportWithDiscipleId)
+        body: JSON.stringify(reportWithIds)
       })
       
       const data = await response.json()
@@ -333,8 +341,8 @@ export function ManageFollowUpReports() {
         toast.success('Follow-up report created successfully')
         setNewReport({
           followUpDetails: [{
-            memberId: '',
-            discipleId: userData?.userId || '', // Set discipleId when resetting form
+            memberId: userData?.userId || '',
+            discipleId: '',
             activityId: '',
             followUpType: 'Visitation',
             fullName: 'Select a member to populate name',
@@ -459,7 +467,7 @@ export function ManageFollowUpReports() {
       setNewReport({
         ...newReport,
         followUpDetails: [...newReport.followUpDetails, {
-          memberId: '',
+          memberId: userData?.userId || '',
           discipleId: '',
           activityId: '',
           followUpType: 'Visitation',
@@ -498,9 +506,9 @@ export function ManageFollowUpReports() {
         if (selectedMember) {
           newDetails[index] = { 
             ...newDetails[index], 
-            memberId: value,
-            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`,
-            discipleId: userData?.userId || '' // Set discipleId to current user's ID
+            memberId: userData?.userId || '', // Set memberId to current user's ID
+            discipleId: value, // Set discipleId to selected member's ID
+            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`
           }
         }
       } else {
@@ -518,9 +526,9 @@ export function ManageFollowUpReports() {
         if (selectedMember) {
           newDetails[index] = { 
             ...newDetails[index], 
-            memberId: value,
-            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`,
-            discipleId: userData?.userId || '' // Set discipleId to current user's ID
+            memberId: userData?.userId || '', // Set memberId to current user's ID
+            discipleId: value, // Set discipleId to selected member's ID
+            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`
           }
         }
       } else {
@@ -645,7 +653,7 @@ export function ManageFollowUpReports() {
                     <label className="block text-sm font-medium text-gray-700">Member</label>
                     <select
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      value={detail.memberId}
+                      value={detail.discipleId}
                       onChange={(e) => handleFollowUpDetailChange(index, 'memberId', e.target.value)}
                       required
                     >
@@ -945,7 +953,7 @@ export function ManageFollowUpReports() {
                         <label className="block text-sm font-medium text-gray-700">Member</label>
                         <select
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          value={detail.memberId}
+                          value={detail.discipleId}
                           onChange={(e) => handleFollowUpDetailChange(index, 'memberId', e.target.value)}
                           required
                         >

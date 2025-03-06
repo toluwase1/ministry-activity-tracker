@@ -200,7 +200,8 @@ export function ManageAttendance() {
         ...(filters.startDate && { startDate: filters.startDate }),
         ...(filters.endDate && { endDate: filters.endDate }),
         ...(filters.memberId && { memberId: filters.memberId }),
-        ...(userData?.userId && { disciplerId: userData.userId })
+        // ...(userData?.userId && { disciplerId: userData.userId }),
+        ...(userData?.userType === "WorkersInTraining" && userData?.userId && { disciplerId: userData.userId })
       })
 
       const response = await fetch(getApiUrl(`AttendanceReport?${queryParams}`), {
