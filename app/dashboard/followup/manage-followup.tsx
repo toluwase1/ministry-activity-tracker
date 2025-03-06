@@ -223,10 +223,10 @@ export function ManageFollowUpReports() {
       if (filters.search) queryParams.append('Search', filters.search)
       if (filters.memberId) queryParams.append('MemberId', filters.memberId)
       
-      // // Add memberId filter for WorkersInTraining users
-      // if (userData?.userType === "WorkersInTraining" && userData?.userId) {
-      //   queryParams.append('MemberId', userData.userId)
-      // }
+      // Add memberId filter for WorkersInTraining users
+      if (userData?.userType === "WorkersInTraining" && userData?.userId) {
+        queryParams.append('MemberId', userData.userId)
+      }
       
       // Pagination and sorting
       queryParams.append('Page', filters.page.toString())
