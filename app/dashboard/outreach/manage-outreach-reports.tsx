@@ -86,23 +86,29 @@ export function ManageOutreachReports() {
 
   const fetchMembers = async () => {
     try {
-        const response = await fetch(getApiUrl('Member'), {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-            }
-        });
+      const queryParams = new URLSearchParams({
+        page: '1',
+        pageSize: '100',
+        ...(userData?.userType === "WorkersInTraining" && userData?.userId && { disciplerId: userData.userId })
+      })
 
-        const data = await response.json();
-        if (handleApiResponse(data) && response.ok) {
-            // Set members to the 'items' array from the API response
-            setMembers(Array.isArray(data.result.items) ? data.result.items : []);
+      const response = await fetch(getApiUrl(`Member?${queryParams}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         }
+      });
+
+      const data = await response.json();
+      if (handleApiResponse(data) && response.ok) {
+        // Set members to the 'items' array from the API response
+        setMembers(Array.isArray(data.result.items) ? data.result.items : []);
+      }
     } catch (error) {
-        console.error('Error fetching members:', error);
-        toast.error('Failed to load members');
+      console.error('Error fetching members:', error);
+      toast.error('Failed to load members');
     }
-};
+  };
 
   const fetchActivities = async () => {
     try {

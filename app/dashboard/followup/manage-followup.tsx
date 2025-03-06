@@ -26,6 +26,7 @@ interface Activity {
 interface FollowUpDetail {
   memberId: string
   discipleId: string
+  discipleFullName: string
   activityId: string
   followUpType: string
   fullName: string
@@ -288,6 +289,7 @@ export function ManageFollowUpReports() {
         const followUpDetails = reportDetails.map((detail: FollowUpDetail) => ({
           memberId: detail.memberId || '',
           discipleId: detail.discipleId || '',
+          discipleFullName: detail.discipleFullName || '',
           activityId: detail.activityId || '',
           followUpType: detail.followUpType || 'Visitation',
           fullName: detail.fullName || '',
@@ -1098,8 +1100,8 @@ export function ManageFollowUpReports() {
                             <p className="text-sm text-gray-900">{detail.followUpType}</p>
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-700">Full Name</p>
-                            <p className="text-sm text-gray-900">{detail.fullName}</p>
+                            <p className="text-sm font-medium text-gray-700">Disciple Name</p>
+                            <p className="text-sm text-gray-900">{detail.discipleFullName}</p>
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-700">Date</p>
