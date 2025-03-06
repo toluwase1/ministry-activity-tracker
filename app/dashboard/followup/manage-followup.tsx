@@ -13,6 +13,7 @@ interface Member {
   lastName: string
   email: string
   status: string
+  disciplerId?: string
 }
 
 interface Activity {
@@ -24,6 +25,7 @@ interface Activity {
 
 interface FollowUpDetail {
   memberId: string
+  discipleId: string
   activityId: string
   followUpType: string
   fullName: string
@@ -93,6 +95,7 @@ export function ManageFollowUpReports() {
   const [newReport, setNewReport] = useState({
     followUpDetails: [{
       memberId: '',
+      discipleId: userData?.userId || '',
       activityId: '',
       followUpType: 'Visitation',
       fullName: 'Select a member to populate name',
@@ -104,6 +107,7 @@ export function ManageFollowUpReports() {
     reportId: string
     followUpDetails: {
       memberId: string
+      discipleId: string
       activityId: string
       followUpType: string
       fullName: string
@@ -259,6 +263,7 @@ export function ManageFollowUpReports() {
   const fetchFollowUpDetails = async (reportId: string) => {
     setLoadingDetails(true)
     try {
+      console.log('Fetching follow-up details for report ID:', reportId)
       const response = await fetch(getApiUrl(`FollowupReport/${reportId}`), {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -267,34 +272,29 @@ export function ManageFollowUpReports() {
       })
 
       const data = await response.json()
-      console.log('API Response for fetch:', data)
-      console.log('Original report ID:', reportId)
+      console.log('Raw API Response:', data)
       
       if (handleApiResponse(data) && response.ok) {
         // The report comes as an array of follow-up details
         const reportDetails = Array.isArray(data.result) ? data.result : [data.result]
-        console.log('Raw report details:', reportDetails)
-        
-        // Get the report details from the response
-        const detail = reportDetails[0] // Get the first detail since edit is for single report
+        console.log('Processed report details:', reportDetails)
         
         // Map to our state structure
-        const followUpDetails = [{
+        const followUpDetails = reportDetails.map((detail: FollowUpDetail) => ({
           memberId: detail.memberId || '',
+          discipleId: detail.discipleId || '',
           activityId: detail.activityId || '',
           followUpType: detail.followUpType || 'Visitation',
           fullName: detail.fullName || '',
           notes: detail.notes || '',
           date: detail.date || new Date().toISOString()
-        }]
+        }))
         
-        const editingState = {
-          reportId: reportId, // Use the original ID passed to the function
-          followUpDetails
-        }
-        console.log('Setting editing state:', editingState)
-        
+        console.log('Mapped follow-up details:', followUpDetails)
         setFollowUpDetails(followUpDetails)
+      } else {
+        console.error('Failed to fetch follow-up details:', data.message)
+        toast.error('Failed to load follow-up details')
       }
     } catch (error) {
       console.error('Error fetching follow-up details:', error)
@@ -308,6 +308,15 @@ export function ManageFollowUpReports() {
     e.preventDefault()
     try {
       setLoading(true)
+      
+      // Ensure discipleId is set for each follow-up detail
+      const reportWithDiscipleId = {
+        followUpDetails: newReport.followUpDetails.map(detail => ({
+          ...detail,
+          discipleId: userData?.userId || '' // Set discipleId from userData
+        }))
+      }
+      
       const response = await fetch(getApiUrl('FollowupReport'), {
         method: 'POST',
         headers: {
@@ -315,15 +324,17 @@ export function ManageFollowUpReports() {
           'Content-Type': 'application/json',
           Accept: 'application/json'
         },
-        body: JSON.stringify(newReport)
+        body: JSON.stringify(reportWithDiscipleId)
       })
-
+      
       const data = await response.json()
+
       if (handleApiResponse(data) && response.ok) {
         toast.success('Follow-up report created successfully')
         setNewReport({
           followUpDetails: [{
             memberId: '',
+            discipleId: userData?.userId || '', // Set discipleId when resetting form
             activityId: '',
             followUpType: 'Visitation',
             fullName: 'Select a member to populate name',
@@ -332,6 +343,8 @@ export function ManageFollowUpReports() {
           }]
         })
         await fetchFollowUpReports()
+      } else {
+        toast.error(data.message || 'Failed to create follow-up report')
       }
     } catch (error) {
       console.error('Error creating follow-up report:', error)
@@ -356,6 +369,7 @@ export function ManageFollowUpReports() {
       const payload = {
         reportId: editingReport.reportId,
         memberId: followUpDetail.memberId,
+        discipleId: followUpDetail.discipleId,
         activityId: followUpDetail.activityId,
         followUpType: followUpDetail.followUpType,
         fullName: followUpDetail.fullName,
@@ -433,6 +447,7 @@ export function ManageFollowUpReports() {
         ...editingReport,
         followUpDetails: [...editingReport.followUpDetails, {
           memberId: '',
+          discipleId: '',
           activityId: '',
           followUpType: 'Visitation',
           fullName: 'Select a member to populate name',
@@ -445,6 +460,7 @@ export function ManageFollowUpReports() {
         ...newReport,
         followUpDetails: [...newReport.followUpDetails, {
           memberId: '',
+          discipleId: '',
           activityId: '',
           followUpType: 'Visitation',
           fullName: 'Select a member to populate name',
@@ -477,13 +493,14 @@ export function ManageFollowUpReports() {
     if (editingReport) {
       const newDetails = [...editingReport.followUpDetails]
       if (field === 'memberId') {
-        // Find the selected member and update the fullName
+        // Find the selected member and update the fullName and discipleId
         const selectedMember = members.find(m => m.id === value)
         if (selectedMember) {
           newDetails[index] = { 
             ...newDetails[index], 
             memberId: value,
-            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`
+            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`,
+            discipleId: userData?.userId || '' // Set discipleId to current user's ID
           }
         }
       } else {
@@ -496,13 +513,14 @@ export function ManageFollowUpReports() {
     } else {
       const newDetails = [...newReport.followUpDetails]
       if (field === 'memberId') {
-        // Find the selected member and update the fullName
+        // Find the selected member and update the fullName and discipleId
         const selectedMember = members.find(m => m.id === value)
         if (selectedMember) {
           newDetails[index] = { 
             ...newDetails[index], 
             memberId: value,
-            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`
+            fullName: `${selectedMember.firstName} ${selectedMember.lastName}`,
+            discipleId: userData?.userId || '' // Set discipleId to current user's ID
           }
         }
       } else {
@@ -558,6 +576,7 @@ export function ManageFollowUpReports() {
         // Map to our state structure
         const followUpDetails = [{
           memberId: detail.memberId || '',
+          discipleId: detail.discipleId || '',
           activityId: detail.activityId || '',
           followUpType: detail.followUpType || 'Visitation',
           fullName: detail.fullName || '',
@@ -940,16 +959,6 @@ export function ManageFollowUpReports() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                        <input
-                          type="text"
-                          className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          value={detail.fullName}
-                          readOnly
-                        />
-                      </div>
-
-                      <div>
                         <label className="block text-sm font-medium text-gray-700">Activity</label>
                         <select
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
@@ -977,6 +986,16 @@ export function ManageFollowUpReports() {
                           <option value="Teaching">Teaching</option>
                           <option value="Visitation">Visitation</option>
                         </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                        <input
+                          type="text"
+                          className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          value={detail.fullName}
+                          readOnly
+                        />
                       </div>
 
                       <div className="col-span-2">
