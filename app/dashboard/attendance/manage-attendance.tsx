@@ -22,6 +22,11 @@ interface AttendanceItem {
   notes?: string
 }
 
+interface WorkerAttendance {
+  isPresent: boolean
+  notes?: string
+}
+
 interface Activity {
   id: string
   name: string
@@ -110,6 +115,10 @@ export function ManageAttendance() {
   })
   const [viewingReport, setViewingReport] = useState<AttendanceReport | null>(null)
   const [editingReport, setEditingReport] = useState<AttendanceReport | null>(null)
+  const [workerAttendance, setWorkerAttendance] = useState<WorkerAttendance>({
+    isPresent: false,
+    notes: ''
+  })
 
   // Fetch members assigned to the logged-in worker
   const fetchMembers = async () => {
@@ -363,6 +372,13 @@ export function ManageAttendance() {
     }
 }
 
+  const handleWorkerAttendanceChange = (field: keyof WorkerAttendance, value: any) => {
+    setWorkerAttendance(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -391,10 +407,26 @@ export function ManageAttendance() {
         return
       }
 
+      // Check for worker's absence without notes
+      if (!workerAttendance.isPresent && (!workerAttendance.notes || workerAttendance.notes.trim() === '')) {
+        toast.error('Please provide reason for your absence')
+        return
+      }
+
       // Format the date to ISO string with the selected date
       const selectedDateTime = new Date(selectedDate)
       selectedDateTime.setHours(12) // Set to noon to avoid timezone issues
       const formattedDate = selectedDateTime.toISOString()
+
+      // Prepare worker's attendance record
+      const workerRecord = {
+        memberId: userData?.userId || '',
+        activityId: selectedActivity,
+        isPresent: workerAttendance.isPresent,
+        isFirstTimer: false,
+        notes: workerAttendance.notes || "",
+        date: formattedDate
+      }
 
       // Prepare attendance records for all members
       const attendanceRecords = attendances
@@ -408,15 +440,25 @@ export function ManageAttendance() {
           date: formattedDate
         }))
 
-      if (attendanceRecords.length === 0) {
+      // Combine worker's record with members' records
+      const allAttendanceRecords = [workerRecord, ...attendanceRecords]
+
+      if (allAttendanceRecords.length === 0) {
         toast.error('No attendance records to submit')
         return
       }
 
       const payload = {
-        attendances: attendanceRecords
+        attendances: allAttendanceRecords
       }
-      console.log('Submitting attendance with payload:', payload)
+      console.log('=== Attendance Submission ===')
+      console.log('Request URL:', getApiUrl('AttendanceReport'))
+      console.log('Request Headers:', {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      })
+      console.log('Request Payload:', JSON.stringify(payload, null, 2))
 
       const response = await fetch(getApiUrl('AttendanceReport'), {
         method: 'POST',
@@ -428,26 +470,25 @@ export function ManageAttendance() {
         body: JSON.stringify(payload)
       })
 
-      console.log('Response status:', response.status)
+      console.log('Response Status:', response.status)
       const data = await response.json()
-      console.log('Response data:', data)
+      console.log('Response Data:', data)
       
       if (response.ok && data.success) {
         toast.success(data.message || 'Attendance submitted successfully')
         
         // Reset form
         setSelectedActivity('')
-        setSelectedDate(new Date().toISOString().split('T')[0]) // Reset date
-        await fetchMembers() // This will reset attendances with all members marked as not present
+        setSelectedDate(new Date().toISOString().split('T')[0])
+        setWorkerAttendance({ isPresent: false, notes: '' })
+        await fetchMembers()
       } else {
         // Handle validation errors
         if (data.validationErrors && data.validationErrors.length > 0) {
-          // Display each validation error as a separate toast
           data.validationErrors.forEach((error: string) => {
             toast.error(error)
           })
         } else {
-          // Display general error message
           toast.error(data.message || 'Failed to submit attendance')
         }
       }
@@ -725,7 +766,34 @@ export function ManageAttendance() {
               </button>
             </div>
 
+            {/* Worker's Attendance Section */}
+            <div className="mb-8 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+              <h4 className="text-lg font-medium text-indigo-900 mb-4">Your Attendance</h4>
+              <div className="flex items-center space-x-4">
+                <label className="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-5 w-5 text-indigo-600"
+                    checked={workerAttendance.isPresent}
+                    onChange={(e) => handleWorkerAttendanceChange('isPresent', e.target.checked)}
+                  />
+                  <span className="ml-2 text-indigo-900">Present</span>
+                </label>
+                {!workerAttendance.isPresent && (
+                  <input
+                    type="text"
+                    className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="Reason for absence"
+                    value={workerAttendance.notes || ''}
+                    onChange={(e) => handleWorkerAttendanceChange('notes', e.target.value)}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Members' Attendance Section */}
             <div className="mt-4 space-y-4">
+              <h4 className="text-lg font-medium text-gray-900 mb-4">Members' Attendance</h4>
               {attendances.map((attendance, index) => (
                 <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex-grow">
