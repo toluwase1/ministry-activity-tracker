@@ -66,7 +66,7 @@ export function ManageOutreachReports() {
     sortOrder: 'desc'
   })
   const [newReport, setNewReport] = useState({
-    memberId: '',
+    memberId: userData?.userId || '',
     activityId: '',
     totalPeopleReached: 0,
     notes: '',
@@ -210,6 +210,15 @@ export function ManageOutreachReports() {
     e.preventDefault()
     try {
       setLoading(true)
+      console.log('=== Creating Outreach Report ===')
+      console.log('Request URL:', getApiUrl('OutreachReport'))
+      console.log('Request Headers:', {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      })
+      console.log('Request Payload:', JSON.stringify(newReport, null, 2))
+
       const response = await fetch(getApiUrl('OutreachReport'), {
         method: 'POST',
         headers: {
@@ -221,10 +230,13 @@ export function ManageOutreachReports() {
       })
 
       const data = await response.json()
+      console.log('Response Status:', response.status)
+      console.log('Response Data:', data)
+
       if (handleApiResponse(data) && response.ok) {
         toast.success('Outreach report created successfully')
         setNewReport({
-          memberId: '',
+          memberId: userData?.userId || '',
           activityId: '',
           totalPeopleReached: 0,
           notes: '',
@@ -379,23 +391,6 @@ export function ManageOutreachReports() {
         <h2 className="text-lg font-medium mb-4">Create New Outreach Report</h2>
         <form onSubmit={handleCreateReport} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Member</label>
-              <select
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={newReport.memberId}
-                onChange={(e) => setNewReport({ ...newReport, memberId: e.target.value })}
-                required
-              >
-                <option value="">Select Member</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700">Activity</label>
               <select
