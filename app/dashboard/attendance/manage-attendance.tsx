@@ -119,6 +119,7 @@ export function ManageAttendance() {
     isPresent: false,
     notes: ''
   })
+  const [viewMode, setViewMode] = useState<'members' | 'self'>('members')
 
   // Fetch members assigned to the logged-in worker
   const fetchMembers = async () => {
@@ -209,8 +210,13 @@ export function ManageAttendance() {
         ...(filters.startDate && { startDate: filters.startDate }),
         ...(filters.endDate && { endDate: filters.endDate }),
         ...(filters.memberId && { memberId: filters.memberId }),
-        // ...(userData?.userId && { disciplerId: userData.userId }),
-        ...(userData?.userType === "WorkersInTraining" && userData?.userId && { disciplerId: userData.userId })
+        ...(userData?.userType === "WorkersInTraining" && userData?.userId && 
+          viewMode === 'members' 
+            ? { disciplerId: userData.userId }
+            : userData?.userType === "WorkersInTraining" && userData?.userId && viewMode === 'self'
+              ? { memberId: userData.userId }
+              : {}
+        )
       })
 
       const response = await fetch(getApiUrl(`AttendanceReport?${queryParams}`), {
@@ -221,7 +227,7 @@ export function ManageAttendance() {
       })
 
       const data = await response.json()
-      console.log('Attendance Reports:', data) // Add this log
+      console.log('Attendance Reports:', data)
       if (response.ok && data.success) {
         setAttendanceReports(data.result.items)
         setTotalCount(data.result.totalCount)
@@ -546,7 +552,14 @@ export function ManageAttendance() {
   }
 
   const handleFilterChange = (key: keyof AttendanceFilters, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value, page: 1 }))
+    setFilters(prev => {
+      // If changing page, don't reset to 1
+      if (key === 'page') {
+        return { ...prev, [key]: value }
+      }
+      // For other filters, reset to page 1
+      return { ...prev, [key]: value, page: 1 }
+    })
   }
 
   const handleViewReport = async (id: string) => {
@@ -704,7 +717,7 @@ export function ManageAttendance() {
     if (token) {
       fetchAttendanceReports()
     }
-  }, [token, filters])
+  }, [token, filters, viewMode])
 
   if (loading && !attendances.length) return <LoadingSpinner />
 
@@ -840,27 +853,60 @@ export function ManageAttendance() {
 
       {/* Attendance Reports Section */}
       <div className="bg-white shadow sm:rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Attendance Reports</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">Attendance Reports</h2>
+          {userData?.userType === "WorkersInTraining" && (
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-500">View:</span>
+              <div className="flex rounded-md shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('members')}
+                  className={`px-4 py-2 text-sm font-medium rounded-l-md border ${
+                    viewMode === 'members'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Members' Attendance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('self')}
+                  className={`px-4 py-2 text-sm font-medium rounded-r-md border ${
+                    viewMode === 'self'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  My Attendance
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         
         {/* Filters */}
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-4">Filters</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Member</label>
-              <select
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={filters.memberId || ''}
-                onChange={(e) => handleFilterChange('memberId', e.target.value)}
-              >
-                <option value="">All Members</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.firstName} {member.lastName}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {viewMode === 'members' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Member</label>
+                <select
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  value={filters.memberId || ''}
+                  onChange={(e) => handleFilterChange('memberId', e.target.value)}
+                >
+                  <option value="">All Members</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.firstName} {member.lastName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Search</label>
