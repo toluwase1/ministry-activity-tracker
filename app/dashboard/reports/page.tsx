@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { AttendanceReport } from './components/attendance-report'
 import { AnalysisReport } from './components/analysis-report'
+import { PerformanceAnalysis } from './components/performance-analysis'
 import RoleBasedRoute from '../../components/RoleBasedRoute'
 
-type ReportType = 'attendance' | 'analysis'
+type ReportType = 'attendance' | 'analysis' | 'performance'
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportType>('attendance')
@@ -31,7 +32,7 @@ export default function ReportsPage() {
               <button
                 type="button"
                 onClick={() => setActiveReport('analysis')}
-                className={`relative -ml-px inline-flex items-center px-4 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
+                className={`relative -ml-px inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium ${
                   activeReport === 'analysis'
                     ? 'bg-indigo-600 text-white border-indigo-600'
                     : 'bg-white text-gray-700 hover:bg-gray-50'
@@ -39,14 +40,27 @@ export default function ReportsPage() {
               >
                 Analysis Reports
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveReport('performance')}
+                className={`relative -ml-px inline-flex items-center px-4 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
+                  activeReport === 'performance'
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Performance Analysis
+              </button>
             </div>
           </div>
         </div>
 
         {activeReport === 'attendance' ? (
           <AttendanceReport />
-        ) : (
+        ) : activeReport === 'analysis' ? (
           <AnalysisReport />
+        ) : (
+          <PerformanceAnalysis />
         )}
       </div>
     </RoleBasedRoute>
